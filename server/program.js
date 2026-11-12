@@ -43,7 +43,7 @@ const CRITERIA = [
   { id: 'clarity', label: 'Chiarezza', look: 'Si capisce il messaggio principale al primo ascolto?', source: 'ai' },
   { id: 'structure', label: 'Struttura', look: 'C\'è un inizio, uno sviluppo, una chiusura?', source: 'ai' },
   { id: 'pace', label: 'Velocità', look: 'Obiettivo circa 130–160 parole al minuto', source: 'measured' },
-  { id: 'fillers', label: 'Intercalari', look: 'Conta "eh", "cioè", "praticamente", "tipo", "diciamo"', source: 'measured' },
+  { id: 'fillers', label: 'Intercalari', look: 'Conta "eh", "cioè", "praticamente", "tipo", "diciamo" (in inglese "um", "like", "you know", "basically")', source: 'measured' },
   { id: 'pauses', label: 'Pause', look: 'Usi pause intenzionali o riempi ogni silenzio?', source: 'measured' },
   { id: 'tone', label: 'Tono', look: 'La voce varia o resta piatta? Cala a fine frase?', source: 'self' },
   { id: 'diction', label: 'Dizione', look: 'Le parole finiscono pulite o si "mangiano" le sillabe?', source: 'self' },
@@ -88,8 +88,8 @@ const ERRORS = [
 
 // Fillers counted in transcripts, per spoken language. Multi-word ones first so they are not double counted.
 const FILLERS = {
-  it: ['e niente', 'in pratica', 'come dire', 'diciamo', 'praticamente', 'sostanzialmente', 'cioè', 'tipo', 'insomma', 'ehm', 'eh', 'uhm', 'mmh', 'boh'],
-  en: ['you know', 'i mean', 'kind of', 'sort of', 'basically', 'literally', 'um', 'uh', 'er', 'erm', 'hmm', 'uhm', 'ehm', 'eh'],
+  it: ['e niente', 'in pratica', 'come dire', 'diciamo', 'praticamente', 'sostanzialmente', 'cioè', 'tipo', 'insomma', 'ehm', 'eh', 'uhm', 'um', 'mmh', 'boh'],
+  en: ['or something', 'and stuff', 'you know', 'i mean', 'you see', 'kind of', 'sort of', 'basically', 'literally', 'actually', 'like', 'um', 'uh', 'er', 'erm', 'hmm', 'uhm', 'ehm', 'eh'],
 };
 
 // The method, condensed, as the model sees it. Generated paths and exercises must stay inside it.

@@ -10,11 +10,18 @@ function words(text) {
   return String(text || '').toLowerCase().match(/[\p{L}\p{N}']+/gu) || [];
 }
 
-// Hesitation sounds are transcribed with any number of repeated letters ("eeeh", "ehmm"): normalise them.
+// Words with their position in the original text, so fillers can be highlighted exactly where they were counted.
+function tokensWithPos(text) {
+  const s = String(text || '');
+  return Array.from(s.matchAll(/[\p{L}\p{N}']+/gu), (m) => ({ w: normToken(m[0].toLowerCase()), start: m.index, end: m.index + m[0].length }));
+}
+
+// Hesitation sounds are transcribed with any number of repeated letters ("eeeh", "ehmm", "ummm"): normalise them.
 function normToken(t) {
   if (/^e+h+$/.test(t)) return 'eh';
   if (/^e+h+m+$/.test(t)) return 'ehm';
-  if (/^u+h*m+$/.test(t)) return 'uhm';
+  if (/^u+m+$/.test(t)) return 'um';
+  if (/^u+h+m+$/.test(t)) return 'uhm';
   if (/^u+h+$/.test(t)) return 'uh';
   if (/^m{2,}h*$/.test(t)) return 'mmh';
   if (/^h+m+$/.test(t)) return 'hmm';
@@ -22,22 +29,53 @@ function normToken(t) {
   return t;
 }
 
-// Words that are fillers only in some contexts ("che tipo di", "kind of person").
-const NOT_FILLER_BEFORE = { tipo: ['di', 'de'], 'kind of': [], 'sort of': [] };
+// Words that are fillers only in some contexts. A candidate is NOT counted when the word before it is in
+// `after` or the word after it is in `before` ("che tipo di", "I like", "what kind of", "do you know").
+// Transcripts often carry no punctuation, so the rules are deliberately conservative.
+const PRONOUNS = ['i', 'you', 'we', 'they', 'he', 'she', 'it', 'who', "i'd", "you'd", "we'd", "they'd", "he'd", "she'd"];
+const CONTEXT = {
+  it: {
+    tipo: { after: ['un', 'che', 'questo', 'quel', 'quello', 'stesso', 'ogni', 'qualsiasi', 'nessun', 'del', 'il', 'quale', 'di', 'altro', 'nuovo'], before: ['di', 'de'] },
+  },
+  en: {
+    like: {
+      after: [...PRONOUNS, 'would', 'could', 'should', 'might', 'will', 'do', 'does', 'did', "don't", "doesn't", "didn't", 'dont', 'to', 'not',
+        'look', 'looks', 'looked', 'looking', 'seem', 'seems', 'seemed', 'sound', 'sounds', 'sounded', 'feel', 'feels', 'felt', 'feeling',
+        'just', 'much', 'more', 'most', 'less', 'something', 'anything', 'nothing', 'people', 'really'],
+      before: ['this', 'that', 'these', 'those', 'me', 'him', 'her', 'us', 'them', 'it', 'a', 'an', 'to'],
+    },
+    'kind of': { after: ['a', 'what', 'this', 'that', 'the', 'any', 'some', 'every', 'one', 'which', 'same', 'different', 'new', 'right', 'wrong', 'only', 'other'] },
+    'sort of': { after: ['a', 'what', 'this', 'that', 'the', 'any', 'some', 'every', 'one', 'which', 'same', 'different', 'new', 'right', 'wrong', 'only', 'other'] },
+    'you know': {
+      after: ['do', 'does', 'did', "don't", "doesn't", "didn't", 'dont', 'if', 'as', 'would', 'will', 'what', 'how', 'could', 'should', 'let'],
+      before: ['that', 'how', 'why', 'where', 'when', 'who', 'whether', 'him', 'her', 'them', 'it', 'about', 'me', 'us', 'this', 'everything', 'anything', 'something'],
+    },
+    'i mean': { after: ['what', 'if', 'do', 'did', 'that'], before: ['it', 'to', 'that'] },
+    'you see': { after: ['do', 'did', 'can', 'could', 'if', 'as', 'will', 'would', 'what', 'when', "don't", "didn't"], before: ['the', 'a', 'an', 'it', 'that', 'this', 'them', 'him', 'her', 'me', 'us', 'how', 'what'] },
+    actually: { after: ['is', 'was', 'are', 'were'] },
+  },
+};
 
 function countFillers(text, lang) {
-  const toks = words(text).map(normToken);
+  const toks = tokensWithPos(text);
   const list = (FILLERS[lang] || FILLERS.it).map((f) => f.split(' ')).sort((a, b) => b.length - a.length);
-  const byWord = {}; let total = 0;
+  const ctx = CONTEXT[lang] || CONTEXT.it;
+  const byWord = {}; const spans = []; let total = 0;
   for (let i = 0; i < toks.length;) {
-    const hit = list.find((f) => f.every((w, j) => toks[i + j] === w));
+    const hit = list.find((f) => f.every((w, j) => toks[i + j] && toks[i + j].w === w));
     if (!hit) { i++; continue; }
     const key = hit.join(' ');
-    const next = toks[i + hit.length];
-    if (!(NOT_FILLER_BEFORE[key] || []).includes(next)) { byWord[key] = (byWord[key] || 0) + 1; total++; }
+    const rule = ctx[key] || {};
+    const prev = i > 0 ? toks[i - 1].w : null;
+    const next = toks[i + hit.length] ? toks[i + hit.length].w : null;
+    const excluded = (rule.after || []).includes(prev) || (rule.before || []).includes(next);
+    if (!excluded) {
+      byWord[key] = (byWord[key] || 0) + 1; total++;
+      spans.push([toks[i].start, toks[i + hit.length - 1].end]);
+    }
     i += hit.length;
   }
-  return { total, byWord };
+  return { total, byWord, spans };
 }
 
 function textMetrics(transcript, durationSec, lang) {
@@ -48,7 +86,7 @@ function textMetrics(transcript, durationSec, lang) {
     durationSec: round1(durationSec),
     words: n,
     wpm: n ? Math.round(n / minutes) : 0,
-    fillers: { total: f.total, perMin: round1(f.total / minutes), byWord: f.byWord },
+    fillers: { total: f.total, perMin: round1(f.total / minutes), byWord: f.byWord, spans: f.spans },
   };
 }
 

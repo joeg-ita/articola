@@ -874,12 +874,31 @@
 
   /* ================= recording detail ================= */
 
-  function highlightFillers(text, byWord) {
+  const speaksEnglish = () => ((S.me && S.me.user.preferences) || {}).speakingLang === 'en';
+  function fillerExamples(short) {
+    if (speaksEnglish()) return short ? 'gli "um"' : 'gli "um", gli "uh" e i "like"';
+    return short ? 'gli "eh"' : 'gli "eh" e i "cioè"';
+  }
+
+  function highlightFillers(text, byWord, spans) {
     const p = h('p.transcript');
+    // Exact positions from the server: only the occurrences that were actually counted are highlighted.
+    if (Array.isArray(spans)) {
+      let last = 0;
+      for (const [s, e] of spans) {
+        if (!(s >= last && e > s && e <= text.length)) continue;
+        p.appendChild(document.createTextNode(text.slice(last, s)));
+        p.appendChild(h('mark', text.slice(s, e)));
+        last = e;
+      }
+      p.appendChild(document.createTextNode(text.slice(last)));
+      return p;
+    }
+    // Recordings measured before positions existed: highlight every occurrence of the counted words.
     const keys = Object.keys(byWord || {});
     if (!keys.length) { p.textContent = text; return p; }
     const alt = keys.sort((a, b) => b.length - a.length).map((k) => {
-      if (k === 'eh') return 'e+h+'; if (k === 'ehm') return 'e+h+m+'; if (k === 'uhm') return 'u+h*m+';
+      if (k === 'eh') return 'e+h+'; if (k === 'ehm') return 'e+h+m+'; if (k === 'uhm') return 'u+h*m+'; if (k === 'um') return 'u+m+';
       return k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/ /g, '\\s+');
     });
     const re = new RegExp(`(^|[^\\p{L}])(${alt.join('|')})(?=$|[^\\p{L}])`, 'giu');
@@ -927,14 +946,14 @@
           !editing && h('button.linkbtn', { onclick: () => drawTranscript(true) }, r.transcript ? 'Correggi' : 'Scrivi')));
         if (editing || !r.transcript) {
           const ta = h('textarea', { rows: '8', maxlength: '20000', 'aria-label': 'Trascrizione', value: r.transcript || '' });
-          tCard.appendChild(h('p.small.muted', r.transcript ? 'Correggi le parole riconosciute male: velocità e intercalari si ricalcolano. Lascia gli "eh" e i "cioè" che hai detto davvero.' : 'Nessuna trascrizione automatica. Riascolta e scrivi cosa hai detto (anche gli "eh"): servono per misurare velocità e intercalari.'));
+          tCard.appendChild(h('p.small.muted', r.transcript ? `Correggi le parole riconosciute male: velocità e intercalari si ricalcolano. Lascia ${fillerExamples()} che hai detto davvero.` : `Nessuna trascrizione automatica. Riascolta e scrivi cosa hai detto (anche ${fillerExamples(true)}): servono per misurare velocità e intercalari.`));
           tCard.appendChild(ta);
           tCard.appendChild(h('div.row',
             h('button.btn.primary.small', { onclick: async (e) => { e.target.disabled = true; try { r = await api('PATCH', `/api/recordings/${r.id}`, { transcript: ta.value }); draw(); toast('Trascrizione salvata.'); } catch (er) { toast(er.message); e.target.disabled = false; } } }, 'Salva'),
             r.transcript && h('button.btn.ghost.small', { onclick: () => drawTranscript(false) }, 'Annulla'),
             M.serverTranscription && r.hasAudio && h('button.btn.ghost.small', { onclick: async (e) => { e.target.disabled = true; e.target.textContent = 'Trascrivo…'; try { r = await api('POST', `/api/recordings/${r.id}/transcribe`); draw(); } catch (er) { toast(er.message); e.target.disabled = false; e.target.textContent = 'Trascrivi dall\'audio'; } } }, 'Trascrivi dall\'audio')));
         } else {
-          tCard.appendChild(highlightFillers(r.transcript, m.fillers && m.fillers.byWord));
+          tCard.appendChild(highlightFillers(r.transcript, m.fillers && m.fillers.byWord, m.fillers && m.fillers.spans));
           if (m.fillers && m.fillers.total) tCard.appendChild(h('p.small.muted', 'Evidenziati gli intercalari: ' + Object.entries(m.fillers.byWord).map(([k, v]) => `"${k}" ×${v}`).join(', ')));
         }
       };
