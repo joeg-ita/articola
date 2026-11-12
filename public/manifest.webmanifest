@@ -1,0 +1,11 @@
+{
+  "name": "Articola",
+  "short_name": "Articola",
+  "description": "Il tuo percorso per parlare con chiarezza, struttura e presenza.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fafaf9",
+  "theme_color": "#fafaf9",
+  "lang": "it",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}

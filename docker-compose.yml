@@ -1,0 +1,69 @@
+# Articola: web app + PostgreSQL.
+#
+#   cp .env.example .env     # set POSTGRES_PASSWORD, BASE_URL, OAuth and AI credentials
+#   docker compose up -d --build
+#
+# Optional HTTPS in front of the app (needed for the microphone on other devices, and required by
+# Google/Facebook for non-localhost redirect URIs):
+#   docker compose --profile https up -d --build
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-articola}
+      POSTGRES_USER: ${POSTGRES_USER:-articola}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?imposta POSTGRES_PASSWORD nel file .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # Not published on the host on purpose: only the app needs it.
+
+  app:
+    build: .
+    image: articola-app:local
+    restart: unless-stopped
+    init: true
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: ""
+      PGHOST: db
+      PGPORT: "5432"
+      PGDATABASE: ${POSTGRES_DB:-articola}
+      PGUSER: ${POSTGRES_USER:-articola}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      NODE_ENV: ${NODE_ENV:-production}
+      BASE_URL: ${BASE_URL:-http://localhost:3000}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "${APP_BIND:+$APP_BIND:}${APP_PORT:-3000}:3000"
+
+  caddy:
+    profiles: ["https"]
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - app
+    environment:
+      DOMAIN: ${DOMAIN:-localhost}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

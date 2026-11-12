@@ -1,0 +1,21 @@
+{
+  "name": "articola",
+  "version": "1.0.0",
+  "description": "Articola – percorsi personalizzati per allenare voce, pensiero strutturato e presenza, con contenuti AI e registrazioni vocali (multi-utente)",
+  "main": "server.js",
+  "private": true,
+  "scripts": {
+    "start": "node server.js",
+    "check": "for f in server.js server/*.js public/*.js; do node --check \"$f\" || exit 1; done",
+    "test": "node --test test/"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@anthropic-ai/sdk": "1.8.0",
+    "pg": "8.23.1",
+    "zod": "4.6.7"
+  }
+}
