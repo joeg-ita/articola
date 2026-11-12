@@ -67,7 +67,7 @@ BASE=http://127.0.0.1:3100 node test/e2e.js
 
 ## Architettura
 
-Stessa impostazione di [langStar](https://github.com/joeg-ita/langstar): Node senza framework (dipendenze: `pg`, `@anthropic-ai/sdk`, `zod`) e frontend vanilla JS senza build.
+Node senza framework (dipendenze: `pg`, `@anthropic-ai/sdk`, `zod`) e frontend vanilla JS senza build.
 
 | File | Ruolo |
 |---|---|
