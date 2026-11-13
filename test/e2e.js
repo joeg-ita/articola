@@ -107,6 +107,15 @@ const ok = (label) => console.log('  ✓', label);
   r = await b('GET', '/api/progress'); assert.equal(r.status, 409); ok('user isolation');
 
   r = await a('GET', '/api/meta'); assert.equal(r.data.criteria.length, 8); assert.equal(r.data.baselineClips.length, 3); ok('meta');
+  r = await a('GET', '/api/meta?lang=en');
+  assert.equal(r.data.criteria[0].label, 'Clarity'); assert.equal(r.data.goals.find((g) => g.id === 'meetings').label, 'Speak up in meetings with confidence');
+  assert.equal(r.data.baselineClips.length, 3); assert.equal(r.data.baselineClips[0].key, 'explain'); assert.equal(r.data.structures.find((x) => x.id === 'WSN').name, 'What / So what / Now what');
+  r = await a('GET', '/api/meta'); assert.equal(r.data.criteria[0].label, 'Chiarezza'); ok('meta in English and Italian');
+  r = await a('PUT', '/api/preferences', { preferences: { goals: [] } }, { 'x-lang': 'en' }); assert.equal(r.status, 400); assert.equal(r.data.error, 'Choose at least one goal.');
+  r = await a('PUT', '/api/preferences', { preferences: { goals: [] } }); assert.equal(r.data.error, 'Indica almeno un obiettivo.'); ok('error messages follow X-Lang');
+  r = await a('GET', '/api/me'); const prefsNow = r.data.user.preferences; assert.equal(prefsNow.uiLang, 'it');
+  r = await a('PUT', '/api/preferences', { preferences: Object.assign({}, prefsNow, { uiLang: 'en' }) }); assert.equal(r.data.preferences.uiLang, 'en');
+  r = await a('PUT', '/api/preferences', { preferences: Object.assign({}, prefsNow, { uiLang: 'fr' }) }); assert.equal(r.data.preferences.uiLang, 'it'); ok('interface language saved in preferences');
   r = await a('DELETE', '/api/me'); assert.equal(r.status, 200);
   r = await a('GET', '/api/me'); assert.equal(r.data.user, null); ok('account deleted and logged out');
   console.log('\nAll e2e checks passed.');

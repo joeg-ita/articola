@@ -11,6 +11,7 @@ const coach = require('./coach');
 const metricsLib = require('./metrics');
 const stt = require('./stt');
 const llm = require('./llm');
+const i18n = require('./i18n');
 const { HttpError, sendJson, readJson, readBody } = require('./http');
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -71,11 +72,11 @@ const recentError = (key) => { const e = jobErrors.get(key); return e && Date.no
 
 /* ---------- paths ---------- */
 
-function pathView(r) {
+function pathView(r, lang) {
   if (!r) return null;
   let status = r.status; let error = r.error;
   if (status === 'generating' && Date.now() - new Date(r.updated_at).getTime() > STALE_GENERATION_MS) { status = 'failed'; error = 'La generazione si è interrotta: riprova.'; }
-  return { id: r.id, status, weeks: r.weeks, startDate: r.start_date ? isoDay(r.start_date) : null, plan: r.plan, error, createdAt: r.created_at };
+  return { id: r.id, status, weeks: r.weeks, startDate: r.start_date ? isoDay(r.start_date) : null, plan: r.plan, error: i18n.tr(lang, error), createdAt: r.created_at };
 }
 
 async function currentPathRow(userId) {
@@ -169,7 +170,7 @@ async function streak(userId, pathId, day) {
   return { current: n, total: days.size };
 }
 
-async function today(user, url, res) {
+async function today(user, req, url, res) {
   const day = checkDay(url.searchParams.get('day'));
   const pathRow = await readyPath(user.id);
   if (!pathRow.start_date) throw new HttpError(409, 'Il percorso non è ancora iniziato.', 'not_started');
@@ -202,7 +203,7 @@ async function today(user, url, res) {
   const prefs = prefsLib.withDefaults(user.preferences);
   sendJson(res, 200, {
     day, position: pos, week: plan.weeks[pos.week - 1], routine: plan.routine, title: plan.title,
-    content, contentStatus, contentError,
+    content, contentStatus, contentError: i18n.tr(i18n.reqLang(req), contentError),
     progress: { stepsDone: p.steps_done, routineDone: p.routine_done, challengeDone: p.challenge_done },
     stats: await weekStats(user.id, pathRow, pos),
     streak: await streak(user.id, pathRow.id, day),
@@ -398,7 +399,7 @@ function seriesRow(r) {
   };
 }
 
-async function progress(user, res) {
+async function progress(user, req, res) {
   const pathRow = await readyPath(user.id);
   const recs = await db.query(`SELECT ${REC_COLS} FROM recordings WHERE user_id = $1 AND path_id = $2 ORDER BY created_at ASC`, [user.id, pathRow.id]);
   const series = recs.rows.map(seriesRow);
@@ -417,7 +418,8 @@ async function progress(user, res) {
   const comparison = P.BASELINE_CLIPS.map((c) => {
     const base = series.find((s) => s.kind === 'baseline' && s.promptKey === c.key) || null;
     const finals = series.filter((s) => s.kind === 'final' && s.promptKey === c.key);
-    return { key: c.key, title: c.title, baseline: base, final: finals[finals.length - 1] || null };
+    const title = (i18n.program(i18n.reqLang(req)).baselineClips.find((x) => x.key === c.key) || c).title;
+    return { key: c.key, title, baseline: base, final: finals[finals.length - 1] || null };
   });
   const ins = await db.query('SELECT payload, recordings_n, created_at FROM insights WHERE user_id = $1 AND path_id = $2', [user.id, pathRow.id]);
   const insight = ins.rows[0] ? Object.assign({}, ins.rows[0].payload, { stale: ins.rows[0].recordings_n !== series.length, createdAt: ins.rows[0].created_at }) : null;
@@ -456,14 +458,13 @@ async function me(req, res) {
     user: { id: user.id, name: user.name, email: user.email, avatarUrl: user.avatarUrl, onboarded: user.onboarded, preferences: prefsLib.withDefaults(user.preferences), hasPreferences: !!(user.preferences && user.preferences.goals) },
     linked: ids.rows.map((r) => r.provider),
     providers: auth.providersPublic(),
-    path: pathView(pathRow),
+    path: pathView(pathRow, i18n.reqLang(req)),
   });
 }
 
-function meta(res) {
+function meta(req, url, res) {
   sendJson(res, 200, {
-    goals: P.GOALS, situations: P.SITUATIONS, areas: P.AREAS, criteria: P.CRITERIA, baselineClips: P.BASELINE_CLIPS,
-    structures: P.STRUCTURES, phrases: P.PHRASES, errors: P.ERRORS, options: prefsLib.OPTIONS,
+    ...i18n.program(i18n.reqLang(req, url)), options: prefsLib.OPTIONS,
     serverTranscription: stt.enabled(), ai: { provider: llm.PROVIDER, model: llm.MODEL },
   }, { 'cache-control': 'private, max-age=300' });
 }
@@ -474,7 +475,7 @@ async function handle(req, res, url) {
   const { pathname } = url; const method = req.method;
   if (method !== 'GET' && method !== 'HEAD' && !req.headers['x-articola']) throw new HttpError(403, 'Richiesta non valida.');
   if (pathname === '/api/me' && method === 'GET') return me(req, res);
-  if (pathname === '/api/meta' && method === 'GET') return meta(res);
+  if (pathname === '/api/meta' && method === 'GET') return meta(req, url, res);
 
   const user = await auth.authenticate(req, res);
   if (!user) throw new HttpError(401, 'Accesso richiesto.');
@@ -493,7 +494,7 @@ async function handle(req, res, url) {
     return sendJson(res, 200, { preferences: prefs });
   }
 
-  if (pathname === '/api/path' && method === 'GET') return sendJson(res, 200, { path: pathView(await currentPathRow(user.id)) });
+  if (pathname === '/api/path' && method === 'GET') return sendJson(res, 200, { path: pathView(await currentPathRow(user.id), i18n.reqLang(req)) });
   if (pathname === '/api/path/generate' && method === 'POST') return generatePath(user, res);
   if (pathname === '/api/path/accept' && method === 'POST') {
     const body = await readJson(req, 2000);
@@ -504,7 +505,7 @@ async function handle(req, res, url) {
     return sendJson(res, 200, { ok: true });
   }
 
-  if (pathname === '/api/today' && method === 'GET') return today(user, url, res);
+  if (pathname === '/api/today' && method === 'GET') return today(user, req, url, res);
   if (pathname === '/api/today/progress' && method === 'POST') return saveProgress(user, req, res);
 
   if (pathname === '/api/recordings' && method === 'GET') return listRecordings(user, res);
@@ -525,7 +526,7 @@ async function handle(req, res, url) {
     if (sub === 'evaluate' && method === 'POST') return evaluateRecording(user, id, res);
   }
 
-  if (pathname === '/api/progress' && method === 'GET') return progress(user, res);
+  if (pathname === '/api/progress' && method === 'GET') return progress(user, req, res);
   if (pathname === '/api/progress/insight' && method === 'POST') return makeInsight(user, req, res);
 
   throw new HttpError(404, 'Non trovato.');

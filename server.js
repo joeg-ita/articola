@@ -9,6 +9,7 @@ const auth = require('./server/auth');
 const api = require('./server/api');
 const llm = require('./server/llm');
 const { HttpError, sendJson } = require('./server/http');
+const i18n = require('./server/i18n');
 
 const PUBLIC = path.join(__dirname, 'public');
 const MIME = {
@@ -61,7 +62,8 @@ const server = http.createServer((req, res) => {
     if (status >= 500) console.error(`[err] ${req.method} ${req.url.split('?')[0]}:`, e.message);
     if (res.headersSent) return res.end();
     // Never leak internals (SQL errors, stack traces) to the client.
-    sendJson(res, status, e instanceof HttpError ? Object.assign({ error: e.message }, e.code ? { code: e.code } : {}) : { error: 'Errore interno del server.' });
+    const lang = i18n.reqLang(req);
+    sendJson(res, status, e instanceof HttpError ? Object.assign({ error: i18n.tr(lang, e.message) }, e.code ? { code: e.code } : {}) : { error: i18n.tr(lang, 'Errore interno del server.') });
   });
 });
 server.requestTimeout = 240000; // evaluations wait for the model

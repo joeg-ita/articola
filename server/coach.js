@@ -29,9 +29,17 @@ const str = (s, max) => {
 };
 const strList = (a, n, max) => (Array.isArray(a) ? a.map((s) => str(s, max)).filter(Boolean).slice(0, n) : []);
 
-const SYSTEM_COACH = `Sei un coach di comunicazione orale (dizione, public speaking, pensiero strutturato) che lavora con professionisti italiani.
-Scrivi in italiano chiaro, frasi brevi, concreto, senza gergo motivazionale né emoji.
+// The person reads what the coach writes in the interface language (uiLang); what they say out loud (tongue
+// twisters, reading, improvisation words, questions, a rewritten opening) is in the language they practise.
+// The prompts stay in Italian; with an English interface the model is told explicitly to answer in English.
+const uiLangName = (prefs) => LANG_NAME[prefs.uiLang] || LANG_NAME.it;
+function systemCoach(prefs) {
+  return `Sei un coach di comunicazione orale (dizione, public speaking, pensiero strutturato) che lavora con professionisti.
+Scrivi in ${uiLangName(prefs)} chiaro, frasi brevi, concreto, senza gergo motivazionale né emoji.${prefs.uiLang === 'en'
+    ? '\nIMPORTANT: these instructions are in Italian, but every text you write for the person must be in English, unless a rule below asks for another language for a specific field.'
+    : ''}
 ${P.METHOD}`;
+}
 
 function profileText(prefs, name) {
   const goals = prefs.goals.map((g) => label(P.GOALS, g));
@@ -56,7 +64,7 @@ function profileText(prefs, name) {
 
 async function generatePath(prefs, name) {
   const plan = await llm.generate({
-    system: SYSTEM_COACH,
+    system: systemCoach(prefs),
     schema: S.PathPlan,
     maxTokens: 12000,
     user: `Crea il percorso personalizzato di questa persona.
@@ -70,6 +78,7 @@ REGOLE:
 - Le aree con autovalutazione più bassa vanno affrontate presto.
 - Sfide reali nelle situazioni della persona (${prefs.situations.map((s) => label(P.SITUATIONS, s)).join(', ') || 'riunioni e conversazioni di lavoro'}), concrete e verificabili ("fatto / non fatto").
 - Tracce di registrazione legate al focus della settimana e al suo lavoro.
+- Tutti i testi del percorso sono in ${uiLangName(prefs)}.
 - La routine quotidiana ha 4-6 passi e dura in totale ${prefs.minutesPerDay} minuti; parte dalla routine del metodo e la adatta (es. più improvvisazione per chi deve rispondere a domande).
 - Per ogni settimana indica le strutture di pensiero su cui lavora (sigle: ${S.STRUCTURE_IDS.join(', ')}; WSN = Cosa / E quindi / E ora, THREE = Regola del tre).`,
   });
@@ -109,7 +118,7 @@ async function generateDaily({ plan, week, prefs, dayIndex, avoid }) {
   const minutesReading = (plan.routine.find((s) => s.kind === 'reading') || {}).minutes || 4;
   const words = Math.round(Math.min(450, Math.max(120, minutesReading * 70)));
   const out = await llm.generate({
-    system: SYSTEM_COACH,
+    system: systemCoach(prefs),
     schema: S.DailyContent,
     maxTokens: 4000,
     user: `Prepara gli esercizi di oggi (giorno ${dayIndex + 1} del percorso, settimana ${week} di ${plan.weeks.length}).
@@ -123,7 +132,7 @@ PROFILO:
 ${profileText(prefs)}
 
 REGOLE:
-- Scioglilingua, brano e parole sono in ${lang}. Scioglilingua: 3, uno facile, uno medio, uno difficile; preferisci quelli classici e corretti, in tema con il focus (es. consonanti doppie, r, s) e non ripetere questi recenti: ${avoid.twisters.join(' | ') || 'nessuno'}.
+- Scioglilingua, brano, parole per l'improvvisazione e domanda per la struttura sono in ${lang} (la persona li dice ad alta voce); focus_tip, hint ed extra sono in ${uiLangName(prefs)}. Scioglilingua: 3, uno facile, uno medio, uno difficile; preferisci quelli classici e corretti, in tema con il focus (es. consonanti doppie, r, s) e non ripetere questi recenti: ${avoid.twisters.join(' | ') || 'nessuno'}.
 - Brano: circa ${words} parole, su uno dei temi della persona${prefs.interests.length ? ` (${prefs.interests.join(', ')})` : ''} o sul suo lavoro, scritto per essere letto ad alta voce; segna con " / " le pause da fare. Titoli recenti da non ripetere: ${avoid.readings.join(' | ') || 'nessuno'}.
 - Parole per l'improvvisazione: concrete e varie, non ripetere: ${avoid.words.join(', ') || 'nessuna'}.
 - Domanda per la struttura: realistica per il suo contesto, con una sola struttura tra quelle della settimana.`,
@@ -149,7 +158,7 @@ async function evaluateRecording({ rec, metrics, prefs, weekInfo }) {
     m.pitchStdSt != null ? `Variazione dell'intonazione: ${m.pitchStdSt} semitoni (sotto 1,5 = piatta, sopra 3 = espressiva)` : '',
   ].filter(Boolean).join('\n');
   const out = await llm.generate({
-    system: `${SYSTEM_COACH}\nTono del feedback: ${TONE[prefs.feedbackTone]}.`,
+    system: `${systemCoach(prefs)}\nTono del feedback: ${TONE[prefs.feedbackTone]}.`,
     schema: S.Evaluation,
     maxTokens: 3000,
     user: `Valuta questa registrazione con la griglia del metodo.
@@ -166,7 +175,8 @@ TRASCRIZIONE (automatica: può contenere errori di riconoscimento, non penalizza
 ${rec.transcript}
 """
 
-Dai i voti 1-5 solo per chiarezza, struttura e chiusura: velocità, intercalari e pause sono già misurati, tono e dizione li valuta la persona riascoltandosi (tu non senti l'audio, non commentarli). Nei miglioramenti puoi usare i dati misurati. La "one_correction" deve essere una sola, coerente con il focus della settimana quando possibile.`,
+Dai i voti 1-5 solo per chiarezza, struttura e chiusura: velocità, intercalari e pause sono già misurati, tono e dizione li valuta la persona riascoltandosi (tu non senti l'audio, non commentarli). Nei miglioramenti puoi usare i dati misurati. La "one_correction" deve essere una sola, coerente con il focus della settimana quando possibile.
+Scrivi tutto in ${uiLangName(prefs)}, tranne "better_opening" che è in ${LANG_NAME[prefs.speakingLang]} (è una frase da dire). Se non riconosci una struttura, "structure_used" è "${prefs.uiLang === 'en' ? 'none' : 'nessuna'}".`,
   });
   return {
     summary: str(out.summary, 1500),
@@ -184,7 +194,7 @@ Dai i voti 1-5 solo per chiarezza, struttura e chiusura: velocità, intercalari 
 async function progressInsight({ plan, rows, prefs, week }) {
   const lines = rows.map((r) => `${r.date} sett.${r.week || '-'} ${r.kind}${r.promptKey ? '/' + r.promptKey : ''}: ${r.wpm ?? '-'} parole/min, ${r.fillersPerMin ?? '-'} intercalari/min, pause ${r.pausesPerMin ?? '-'}/min, intonazione ${r.pitchStdSt ?? '-'} st, voto medio ${r.avgScore ?? '-'}`).join('\n');
   const out = await llm.generate({
-    system: `${SYSTEM_COACH}\nTono: ${TONE[prefs.feedbackTone]}.`,
+    system: `${systemCoach(prefs)}\nTono: ${TONE[prefs.feedbackTone]}.`,
     schema: S.Insight,
     maxTokens: 2000,
     user: `Leggi i progressi di questa persona (settimana ${week} di ${plan.weeks.length}, obiettivi: ${plan.goals.join('; ')}).

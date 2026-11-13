@@ -7,6 +7,7 @@ Multi-user web app (desktop and mobile, installable as a PWA) for training **cle
 - **Daily exercises, written for you**: tongue twisters, a passage to read aloud with marked pauses (on your topics), words for improvisation and a question to answer using BLUF, PREP or SCQA. There are also timers and a 4-2-6 breathing guide.
 - **Voice recording**: baseline (three clips), weekly recording, free practice and final comparison. Each recording measures speaking rate (words/min), filler words ("eh", "cioè", "praticamente"…), pauses and pitch variation. The AI coach rates clarity, structure and closing and gives you **one** correction. You rate tone and diction yourself by listening back, using the 1-5 rubric.
 - **Progress over time**: charts with the target band, a week-by-week table (like the program's tracking sheet), baseline vs. final comparison with audio, and an AI reading of your progress.
+- **Italian and English**: the interface and everything the coach writes follow the app language (from the browser, switchable on the sign-in page and in Settings, saved in the account). The language you practise speaking is chosen separately, so you can use the app in Italian and train in English or vice versa.
 - **Login** with Google and Facebook (OAuth 2.0), data in PostgreSQL, light/dark theme.
 
 ## Running with Docker

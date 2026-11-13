@@ -10,6 +10,7 @@ const AREA_IDS = P.ids(P.AREAS);
 
 const OPTIONS = {
   speakingLang: ['it', 'en'],
+  uiLang: ['it', 'en'], // language of the interface and of what the coach writes
   minutesPerDay: [10, 15, 20, 30],
   daysPerWeek: [3, 5, 7],
   weeks: [4, 6, 8, 12],
@@ -20,7 +21,7 @@ const OPTIONS = {
 };
 
 const DEFAULTS = {
-  goals: [], goalText: '', role: '', situations: [], speakingLang: 'it',
+  goals: [], goalText: '', role: '', situations: [], speakingLang: 'it', uiLang: 'it',
   selfRatings: { voice: 3, structure: 3, confidence: 3, fluency: 3 }, struggle: '',
   minutesPerDay: 15, daysPerWeek: 5, weeks: 8, style: 'balanced', interests: [],
   feedbackTone: 'encouraging', timeOfDay: 'morning', recordingDay: 5,
@@ -52,6 +53,7 @@ function validate(input) {
   out.role = cleanText(input.role, 80);
   out.situations = pickList(input.situations, SITUATION_IDS, 6);
   out.speakingLang = pickOne(input.speakingLang, OPTIONS.speakingLang, DEFAULTS.speakingLang);
+  out.uiLang = pickOne(input.uiLang, OPTIONS.uiLang, DEFAULTS.uiLang);
   out.selfRatings = {};
   const r = input.selfRatings && typeof input.selfRatings === 'object' ? input.selfRatings : {};
   for (const id of AREA_IDS) {

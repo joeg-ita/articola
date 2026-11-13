@@ -30,7 +30,7 @@
     const X = (t) => (x1 === x0 ? (M.l + W - M.r) / 2 : M.l + ((t - x0) / (x1 - x0)) * (W - M.l - M.r));
     const Y = (v) => M.t + (1 - (v - lo) / (hi - lo || 1)) * (H - M.t - M.b);
 
-    const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, class: 'chart', role: 'img', 'aria-label': opts.title || 'Grafico' });
+    const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, class: 'chart', role: 'img', 'aria-label': opts.title || (window.I18N ? window.I18N.t('Grafico') : 'Grafico') });
     // grid + y ticks
     for (const t of niceTicks(lo, hi, 4)) {
       svg.appendChild(el('line', { x1: M.l, x2: W - M.r, y1: Y(t), y2: Y(t), class: 'grid' }));
@@ -42,7 +42,7 @@
       if (opts.bandLabel) { const bl = el('text', { x: W - M.r - 6, y: Y(Math.min(b1, hi)) + 13, class: 'band-label', 'text-anchor': 'end' }); bl.textContent = opts.bandLabel; svg.appendChild(bl); }
     }
     // x labels: first and last date only (selective labelling)
-    const dfmt = (t) => new Date(t).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' });
+    const dfmt = (t) => new Date(t).toLocaleDateString(window.I18N ? window.I18N.locale() : 'it-IT', { day: 'numeric', month: 'short' });
     const xl = el('text', { x: X(x0), y: H - 8, class: 'tick', 'text-anchor': x1 === x0 ? 'middle' : 'start' }); xl.textContent = dfmt(x0); svg.appendChild(xl);
     if (x1 !== x0) { const xr = el('text', { x: X(x1), y: H - 8, class: 'tick', 'text-anchor': 'end' }); xr.textContent = dfmt(x1); svg.appendChild(xr); }
     // line + markers

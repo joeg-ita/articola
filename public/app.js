@@ -7,6 +7,8 @@
 
   const $app = document.getElementById('app');
   const S = { me: null, meta: null };
+  const I18N = window.I18N;
+  const t = I18N.t;
   let cleanups = [];
   let prevRoute = null, curRoute = null; // where the user came from, for "back" links
   const onLeave = (fn) => cleanups.push(fn);
@@ -40,7 +42,7 @@
   function h(sel, attrs, ...kids) {
     const m = sel.match(/^([a-z0-9]+)((?:[.#][\w-]+)*)$/i);
     const n = document.createElement(m ? m[1] : 'div');
-    if (m && m[2]) m[2].replace(/([.#])([\w-]+)/g, (_, t, v) => { if (t === '.') n.classList.add(v); else n.id = v; });
+    if (m && m[2]) m[2].replace(/([.#])([\w-]+)/g, (_, kind, v) => { if (kind === '.') n.classList.add(v); else n.id = v; });
     if (attrs && (typeof attrs !== 'object' || attrs instanceof Node || Array.isArray(attrs))) { kids.unshift(attrs); attrs = null; }
     for (const k in attrs || {}) {
       const v = attrs[k];
@@ -57,29 +59,29 @@
   }
 
   async function api(method, path, body) {
-    const opts = { method, headers: { 'x-articola': '1' }, credentials: 'same-origin' };
+    const opts = { method, headers: { 'x-articola': '1', 'x-lang': I18N.lang }, credentials: 'same-origin' };
     if (body instanceof Blob) { opts.body = body; opts.headers['content-type'] = body.type || 'audio/webm'; }
     else if (body !== undefined) { opts.body = JSON.stringify(body); opts.headers['content-type'] = 'application/json'; }
     let r;
-    try { r = await fetch(path, opts); } catch (e) { throw Object.assign(new Error('Connessione assente: riprova.'), { status: 0 }); }
+    try { r = await fetch(path, opts); } catch (e) { throw Object.assign(new Error(t('Connessione assente: riprova.')), { status: 0 }); }
     const j = await r.json().catch(() => ({}));
-    if (r.status === 401 && path !== '/api/me') { location.reload(); throw new Error('Sessione scaduta.'); }
-    if (!r.ok) throw Object.assign(new Error(j.error || 'Qualcosa non ha funzionato.'), { status: r.status, code: j.code });
+    if (r.status === 401 && path !== '/api/me') { location.reload(); throw new Error(t('Sessione scaduta.')); }
+    if (!r.ok) throw Object.assign(new Error(j.error || t('Qualcosa non ha funzionato.')), { status: r.status, code: j.code });
     return j;
   }
 
   let toastTimer;
   function toast(msg) {
-    const t = document.getElementById('toast');
-    t.textContent = msg; t.classList.add('show');
-    clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 3200);
+    const el = document.getElementById('toast');
+    el.textContent = msg; el.classList.add('show');
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), 3200);
   }
 
   const pad = (n) => String(n).padStart(2, '0');
   const todayKey = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
   const daysBetween = (a, b) => Math.round((Date.parse(b + 'T00:00:00Z') - Date.parse(a + 'T00:00:00Z')) / 86400000);
-  const fmtDate = (d, o) => new Date(d).toLocaleDateString('it-IT', o || { day: 'numeric', month: 'long' });
-  const fmtNum = (n, d = 0) => (n == null ? '—' : Number(n).toLocaleString('it-IT', { maximumFractionDigits: d, minimumFractionDigits: d }));
+  const fmtDate = (d, o) => new Date(d).toLocaleDateString(I18N.locale(), o || { day: 'numeric', month: 'long' });
+  const fmtNum = (n, d = 0) => (n == null ? '—' : Number(n).toLocaleString(I18N.locale(), { maximumFractionDigits: d, minimumFractionDigits: d }));
   const fmtTime = (s) => `${Math.floor(s / 60)}:${pad(Math.floor(s % 60))}`;
   const store = {
     get(k, d) { try { const v = localStorage.getItem('articola.' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -109,7 +111,7 @@
   }
 
   function loading(text) {
-    return h('div.empty', h('span.spinner'), text || 'Carico…');
+    return h('div.empty', h('span.spinner'), text || t('Carico…'));
   }
 
   // Audio player for a stored recording. MediaRecorder (Chrome/Firefox) writes WebM with no duration and no seek
@@ -137,7 +139,7 @@
   }
 
   function errorBox(e, retry) {
-    return h('div.empty', h('p', e.message || String(e)), retry && h('button.btn', { onclick: retry }, 'Riprova'));
+    return h('div.empty', h('p', e.message || String(e)), retry && h('button.btn', { onclick: retry }, t('Riprova')));
   }
 
   /* ---- small widgets ---- */
@@ -150,7 +152,7 @@
       onclick: () => {
         const i = selected.indexOf(o.id);
         if (i >= 0) selected.splice(i, 1);
-        else { if (max && selected.length >= max) { toast(`Puoi sceglierne al massimo ${max}.`); return; } selected.push(o.id); }
+        else { if (max && selected.length >= max) { toast(t('Puoi sceglierne al massimo {n}.', { n: max })); return; } selected.push(o.id); }
         sync(); onChange && onChange(selected);
       },
     }, o.label)));
@@ -170,25 +172,25 @@
     const wrap = h('div.dots5', { role: onPick ? 'radiogroup' : null, 'aria-label': label || null });
     for (let i = 1; i <= 5; i++) {
       wrap.appendChild(onPick
-        ? h('button', { type: 'button', class: value === i ? 'on' : null, role: 'radio', 'aria-checked': String(value === i), 'aria-label': `${i} su 5`, onclick: () => onPick(i) }, String(i))
+        ? h('button', { type: 'button', class: value === i ? 'on' : null, role: 'radio', 'aria-checked': String(value === i), 'aria-label': t('{i} su 5', { i }), onclick: () => onPick(i) }, String(i))
         : h('span', { class: value === i ? 'on' : null, 'aria-hidden': value === i ? null : 'true' }, String(i)));
     }
-    if (!onPick && value == null) wrap.setAttribute('aria-label', 'non disponibile');
+    if (!onPick && value == null) wrap.setAttribute('aria-label', t('non disponibile'));
     return wrap;
   }
 
   function timer(minutes, label) {
     let left = Math.round(minutes * 60); let iv = null;
     const out = h('output', fmtTime(left));
-    const btn = h('button.btn.small', { type: 'button' }, label || `Timer ${minutes} min`);
-    const stop = () => { clearInterval(iv); iv = null; btn.textContent = 'Riprendi'; };
+    const btn = h('button.btn.small', { type: 'button' }, label || t('Timer {n} min', { n: minutes }));
+    const stop = () => { clearInterval(iv); iv = null; btn.textContent = t('Riprendi'); };
     btn.addEventListener('click', () => {
       if (iv) return stop();
       if (left <= 0) left = Math.round(minutes * 60);
-      btn.textContent = 'Pausa';
+      btn.textContent = t('Pausa');
       iv = setInterval(() => {
         left--; out.textContent = fmtTime(Math.max(0, left));
-        if (left <= 0) { clearInterval(iv); iv = null; btn.textContent = 'Ricomincia'; if (navigator.vibrate) navigator.vibrate(200); toast('Tempo!'); }
+        if (left <= 0) { clearInterval(iv); iv = null; btn.textContent = t('Ricomincia'); if (navigator.vibrate) navigator.vibrate(200); toast(t('Tempo!')); }
       }, 1000);
     });
     onLeave(() => clearInterval(iv));
@@ -196,26 +198,55 @@
   }
 
   function breathPacer(minutes) {
-    const circle = h('div.breath-circle', 'Pronto');
-    const btn = h('button.btn.small', { type: 'button' }, 'Avvia il respiro 4-2-6');
-    let t = null; let running = false;
-    const phases = [['Inspira', 4, 1], ['Trattieni', 2, 1], ['Espira', 6, 0.7]];
+    const circle = h('div.breath-circle', t('Pronto'));
+    const btn = h('button.btn.small', { type: 'button' }, t('Avvia il respiro 4-2-6'));
+    let phaseTimer = null; let running = false;
+    const phases = [[t('Inspira'), 4, 1], [t('Trattieni'), 2, 1], [t('Espira'), 6, 0.7]];
     function run(i, endAt) {
       if (!running) return;
-      if (Date.now() > endAt) { running = false; circle.textContent = 'Fatto'; circle.style.transform = 'scale(0.7)'; btn.textContent = 'Ricomincia'; return; }
+      if (Date.now() > endAt) { running = false; circle.textContent = t('Fatto'); circle.style.transform = 'scale(0.7)'; btn.textContent = t('Ricomincia'); return; }
       const [name, sec, scale] = phases[i % 3];
       circle.textContent = name;
       circle.style.transitionDuration = sec + 's';
       circle.style.transform = `scale(${scale})`;
-      t = setTimeout(() => run(i + 1, endAt), sec * 1000);
+      phaseTimer = setTimeout(() => run(i + 1, endAt), sec * 1000);
     }
     btn.addEventListener('click', () => {
-      if (running) { running = false; clearTimeout(t); btn.textContent = 'Avvia il respiro 4-2-6'; circle.textContent = 'Pronto'; circle.style.transform = 'scale(0.7)'; return; }
-      running = true; btn.textContent = 'Ferma'; run(0, Date.now() + minutes * 60000);
+      if (running) { running = false; clearTimeout(phaseTimer); btn.textContent = t('Avvia il respiro 4-2-6'); circle.textContent = t('Pronto'); circle.style.transform = 'scale(0.7)'; return; }
+      running = true; btn.textContent = t('Ferma'); run(0, Date.now() + minutes * 60000);
     });
-    onLeave(() => { running = false; clearTimeout(t); });
+    onLeave(() => { running = false; clearTimeout(phaseTimer); });
     return h('div.breath', circle, btn);
   }
+
+  /* ================= language ================= */
+
+  // Texts in index.html, which is static.
+  function applyStatic() {
+    const skip = document.querySelector('.skip-link'); if (skip) skip.textContent = t('Vai al contenuto');
+    const nav = document.getElementById('nav'); if (nav) nav.setAttribute('aria-label', t('Navigazione principale'));
+    const av = document.getElementById('avatar'); if (av) av.setAttribute('aria-label', t('Impostazioni'));
+    const desc = document.querySelector('meta[name="description"]'); if (desc) desc.setAttribute('content', 'Articola: ' + t('Il tuo percorso personalizzato per parlare con chiarezza, struttura e presenza.'));
+  }
+
+  // Switch the interface language: remembered on this device and, once there are preferences, in the account
+  // (so the coach writes in it too). The method content comes from the server in the new language.
+  async function switchLang(l) {
+    if (l === I18N.lang) return;
+    I18N.set(l);
+    applyStatic();
+    try {
+      if (S.me && S.me.user && S.me.user.hasPreferences) {
+        const r = await api('PUT', '/api/preferences', { preferences: Object.assign({}, S.me.user.preferences, { uiLang: l }) });
+        S.me.user.preferences = r.preferences;
+      }
+      S.meta = await api('GET', '/api/meta?lang=' + l);
+    } catch (e) { toast(e.message); }
+    render();
+  }
+
+  // Language names are written in their own language, so they can be found whatever the current one is.
+  const langSwitch = () => segmented([{ v: 'it', l: 'Italiano' }, { v: 'en', l: 'English' }], I18N.lang, switchLang, 'Lingua / Language');
 
   /* ================= shell & router ================= */
 
@@ -238,7 +269,7 @@
     av.textContent = '';
     if (u.avatarUrl) av.style.backgroundImage = `url("${encodeURI(u.avatarUrl)}")`;
     else av.textContent = (u.name || '?').trim().charAt(0).toUpperCase();
-    if (showNav) NAV.forEach((n) => nav.appendChild(h('a', { href: n.href, 'data-route': n.route }, icon(n.icon), h('span', n.label))));
+    if (showNav) NAV.forEach((n) => nav.appendChild(h('a', { href: n.href, 'data-route': n.route }, icon(n.icon), h('span', t(n.label)))));
   }
 
   function setActive(route) {
@@ -299,29 +330,30 @@
   function viewLogin() {
     const prov = S.me.providers || {};
     const err = new URLSearchParams(location.search).get('auth_error');
-    const devName = h('input', { type: 'text', placeholder: 'Il tuo nome', 'aria-label': 'Nome', maxlength: '60' });
+    const devName = h('input', { type: 'text', placeholder: t('Il tuo nome'), 'aria-label': t('Nome'), maxlength: '60' });
     const page = h('div.login', h('div.login-inner',
       h('span.mark', { 'aria-hidden': 'true' }),
       h('div.stack',
-        h('h1', 'Parla con chiarezza.'),
-        h('p.lead', 'Un percorso costruito sui tuoi obiettivi: dieci-quindici minuti al giorno, esercizi scritti per te dall\'AI, la tua voce registrata per vedere i progressi.')),
+        h('h1', t('Parla con chiarezza.')),
+        h('p.lead', t('Un percorso costruito sui tuoi obiettivi: dieci-quindici minuti al giorno, esercizi scritti per te dall\'AI, la tua voce registrata per vedere i progressi.'))),
       h('div.pillars',
-        h('div', h('b', 'Voce'), 'chiara e pulita'),
-        h('div', h('b', 'Pensiero'), 'strutturato'),
-        h('div', h('b', 'Presenza'), 'nelle interazioni')),
-      err && h('div.notice.warn', AUTH_ERRORS[err] || 'Accesso non riuscito.'),
+        h('div', h('b', t('Voce')), t('chiara e pulita')),
+        h('div', h('b', t('Pensiero')), t('strutturato')),
+        h('div', h('b', t('Presenza')), t('nelle interazioni'))),
+      err && h('div.notice.warn', t(AUTH_ERRORS[err]) || t('Accesso non riuscito.')),
       h('div.providers',
-        prov.google && h('a.btn.provider-btn', { href: '/auth/google' }, icon('google'), 'Continua con Google'),
-        prov.facebook && h('a.btn.provider-btn', { href: '/auth/facebook' }, icon('facebook'), 'Continua con Facebook'),
-        !prov.google && !prov.facebook && !prov.dev && h('p.muted', 'Nessun metodo di accesso configurato sul server.'),
+        prov.google && h('a.btn.provider-btn', { href: '/auth/google' }, icon('google'), t('Continua con Google')),
+        prov.facebook && h('a.btn.provider-btn', { href: '/auth/facebook' }, icon('facebook'), t('Continua con Facebook')),
+        !prov.google && !prov.facebook && !prov.dev && h('p.muted', t('Nessun metodo di accesso configurato sul server.')),
         prov.dev && h('form.stack', {
           onsubmit: async (e) => {
             e.preventDefault();
             try { await api('POST', '/auth/dev', { name: devName.value }); await refreshMe(); history.replaceState(null, '', '/'); render(); }
             catch (er) { toast(er.message); }
           },
-        }, h('p.small.muted', 'Accesso di sviluppo (solo locale)'), devName, h('button.btn.primary.block', { type: 'submit' }, 'Entra'))),
-      h('p.small.muted', 'Accedendo, i tuoi dati e le tue registrazioni restano nel tuo account e puoi cancellarli quando vuoi.')));
+        }, h('p.small.muted', t('Accesso di sviluppo (solo locale)')), devName, h('button.btn.primary.block', { type: 'submit' }, t('Entra')))),
+      h('p.small.muted', t('Accedendo, i tuoi dati e le tue registrazioni restano nel tuo account e puoi cancellarli quando vuoi.')),
+      h('div.row', { style: 'justify-content:center' }, langSwitch())));
     $app.textContent = '';
     $app.appendChild(page);
   }
@@ -335,42 +367,43 @@
     const base = u.hasPreferences ? JSON.parse(JSON.stringify(u.preferences)) : JSON.parse(JSON.stringify(u.preferences || {}));
     const d = edit ? base : Object.assign(base, store.get('onb', {}));
     d.goals = d.goals || []; d.situations = d.situations || []; d.interests = d.interests || []; d.selfRatings = d.selfRatings || {};
+    if (!u.hasPreferences && !store.get('onb', {}).speakingLang) d.speakingLang = I18N.lang;
     let i = edit ? 1 : store.get('onbStep', 0);
     const save = () => { if (!edit) { store.set('onb', d); store.set('onbStep', i); } };
 
     const steps = [
       { // 0
-        eyebrow: 'Benvenuto', title: `Ciao ${(u.name || '').split(' ')[0]}. Costruiamo il tuo percorso.`,
-        lead: 'Ti faccio qualche domanda su obiettivi, contesto e tempo a disposizione. In base alle risposte l\'AI scrive un piano settimana per settimana, con esercizi quotidiani su misura.',
+        eyebrow: t('Benvenuto'), title: t('Ciao {name}. Costruiamo il tuo percorso.', { name: (u.name || '').split(' ')[0] }),
+        lead: t('Ti faccio qualche domanda su obiettivi, contesto e tempo a disposizione. In base alle risposte l\'AI scrive un piano settimana per settimana, con esercizi quotidiani su misura.'),
         body: () => h('div.stack',
-          failed && h('div.notice.warn', 'L\'ultima generazione non è riuscita: ', failed),
+          failed && h('div.notice.warn', t('L\'ultima generazione non è riuscita: '), failed),
           h('div.card.quiet.stack',
-            h('div.row', h('span.pill', '1'), 'Obiettivi e contesto'),
-            h('div.row', h('span.pill', '2'), 'Da dove parti'),
-            h('div.row', h('span.pill', '3'), 'Tempo e preferenze'),
-            h('div.row', h('span.pill', '4'), 'Il tuo percorso, generato per te'))),
-        next: 'Iniziamo', valid: () => true,
+            h('div.row', h('span.pill', '1'), t('Obiettivi e contesto')),
+            h('div.row', h('span.pill', '2'), t('Da dove parti')),
+            h('div.row', h('span.pill', '3'), t('Tempo e preferenze')),
+            h('div.row', h('span.pill', '4'), t('Il tuo percorso, generato per te')))),
+        next: t('Iniziamo'), valid: () => true,
       },
       { // 1
-        eyebrow: 'Obiettivi', title: 'Cosa vuoi ottenere?', lead: 'Scegline fino a quattro. Il percorso darà più spazio a questi.',
+        eyebrow: t('Obiettivi'), title: t('Cosa vuoi ottenere?'), lead: t('Scegline fino a quattro. Il percorso darà più spazio a questi.'),
         body: () => h('div.stack',
           chipGroup(M.goals, d.goals, 4),
-          h('label.field', 'Con parole tue', h('span.field-hint', 'Facoltativo: es. "voglio presentare il progetto al board senza leggere le slide"'),
+          h('label.field', t('Con parole tue'), h('span.field-hint', t('Facoltativo: es. "voglio presentare il progetto al board senza leggere le slide"')),
             h('textarea', { maxlength: '300', value: d.goalText || '', oninput: (e) => { d.goalText = e.target.value; save(); } }))),
-        valid: () => d.goals.length > 0 || (d.goalText || '').trim().length > 3, invalidMsg: 'Scegli almeno un obiettivo.',
+        valid: () => d.goals.length > 0 || (d.goalText || '').trim().length > 3, invalidMsg: t('Scegli almeno un obiettivo.'),
       },
       { // 2
-        eyebrow: 'Contesto', title: 'Dove ti capita di parlare?', lead: 'Le sfide reali di ogni settimana saranno in queste situazioni.',
+        eyebrow: t('Contesto'), title: t('Dove ti capita di parlare?'), lead: t('Le sfide reali di ogni settimana saranno in queste situazioni.'),
         body: () => h('div.stack',
-          h('label.field', 'Il tuo ruolo', h('span.field-hint', 'es. sviluppatrice backend, project manager, studente'),
+          h('label.field', t('Il tuo ruolo'), h('span.field-hint', t('es. sviluppatrice backend, project manager, studente')),
             h('input', { type: 'text', maxlength: '80', value: d.role || '', oninput: (e) => { d.role = e.target.value; save(); } })),
-          h('div.field.stack', h('b', 'Situazioni'), chipGroup(M.situations, d.situations, 6)),
-          h('div.field.stack', h('b', 'In che lingua vuoi allenarti a parlare?'),
-            segmented([{ v: 'it', l: 'Italiano' }, { v: 'en', l: 'Inglese' }], d.speakingLang || 'it', (v) => { d.speakingLang = v; save(); }, 'Lingua'))),
+          h('div.field.stack', h('b', t('Situazioni')), chipGroup(M.situations, d.situations, 6)),
+          h('div.field.stack', h('b', t('In che lingua vuoi allenarti a parlare?')),
+            segmented([{ v: 'it', l: t('Italiano') }, { v: 'en', l: t('Inglese') }], d.speakingLang || 'it', (v) => { d.speakingLang = v; save(); }, t('Lingua')))),
         valid: () => true,
       },
       { // 3
-        eyebrow: 'Punto di partenza', title: 'Come ti valuti oggi?', lead: 'Da 1 (difficoltà) a 5 (a tuo agio). Le aree più basse arrivano prima nel percorso. Alla prima settimana registrerai il tuo punto zero, così vedremo i numeri veri.',
+        eyebrow: t('Punto di partenza'), title: t('Come ti valuti oggi?'), lead: t('Da 1 (difficoltà) a 5 (a tuo agio). Le aree più basse arrivano prima nel percorso. Alla prima settimana registrerai il tuo punto zero, così vedremo i numeri veri.'),
         body: () => {
           const card = h('div.card');
           const draw = () => {
@@ -380,29 +413,29 @@
           };
           draw();
           return h('div.stack', card,
-            h('label.field', 'Cosa ti mette più in difficoltà?', h('span.field-hint', 'Facoltativo: es. "quando mi fanno una domanda a sorpresa mi blocco"'),
+            h('label.field', t('Cosa ti mette più in difficoltà?'), h('span.field-hint', t('Facoltativo: es. "quando mi fanno una domanda a sorpresa mi blocco"')),
               h('textarea', { maxlength: '300', value: d.struggle || '', oninput: (e) => { d.struggle = e.target.value; save(); } })));
         },
         valid: () => true,
       },
       { // 4
-        eyebrow: 'Tempo', title: 'Quanto tempo hai?', lead: 'Meglio poco ogni giorno che tanto una volta a settimana.',
+        eyebrow: t('Tempo'), title: t('Quanto tempo hai?'), lead: t('Meglio poco ogni giorno che tanto una volta a settimana.'),
         body: () => h('div.stack',
-          h('div.field.stack', h('b', 'Minuti al giorno'), segmented(M.options.minutesPerDay.map((v) => ({ v, l: `${v} min` })), d.minutesPerDay || 15, (v) => { d.minutesPerDay = v; save(); })),
-          h('div.field.stack', h('b', 'Giorni a settimana'), segmented(M.options.daysPerWeek.map((v) => ({ v, l: `${v}` })), d.daysPerWeek || 5, (v) => { d.daysPerWeek = v; save(); })),
-          h('div.field.stack', h('b', 'Durata del percorso'), segmented(M.options.weeks.map((v) => ({ v, l: `${v} sett.` })), d.weeks || 8, (v) => { d.weeks = v; save(); })),
-          h('div.field.stack', h('b', 'Quando ti alleni'), segmented([{ v: 'morning', l: 'Mattina' }, { v: 'lunch', l: 'Pausa pranzo' }, { v: 'evening', l: 'Sera' }], d.timeOfDay || 'morning', (v) => { d.timeOfDay = v; save(); })),
-          h('div.field.stack', h('b', 'Giorno della registrazione settimanale'),
-            segmented([1, 2, 3, 4, 5, 6, 0].map((v) => ({ v, l: ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'][v] })), d.recordingDay != null ? d.recordingDay : 5, (v) => { d.recordingDay = v; save(); }))),
+          h('div.field.stack', h('b', t('Minuti al giorno')), segmented(M.options.minutesPerDay.map((v) => ({ v, l: `${v} min` })), d.minutesPerDay || 15, (v) => { d.minutesPerDay = v; save(); })),
+          h('div.field.stack', h('b', t('Giorni a settimana')), segmented(M.options.daysPerWeek.map((v) => ({ v, l: `${v}` })), d.daysPerWeek || 5, (v) => { d.daysPerWeek = v; save(); })),
+          h('div.field.stack', h('b', t('Durata del percorso')), segmented(M.options.weeks.map((v) => ({ v, l: t('{n} sett.', { n: v }) })), d.weeks || 8, (v) => { d.weeks = v; save(); })),
+          h('div.field.stack', h('b', t('Quando ti alleni')), segmented([{ v: 'morning', l: t('Mattina') }, { v: 'lunch', l: t('Pausa pranzo') }, { v: 'evening', l: t('Sera') }], d.timeOfDay || 'morning', (v) => { d.timeOfDay = v; save(); })),
+          h('div.field.stack', h('b', t('Giorno della registrazione settimanale')),
+            segmented([1, 2, 3, 4, 5, 6, 0].map((v) => ({ v, l: [t('Dom'), t('Lun'), t('Mar'), t('Mer'), t('Gio'), t('Ven'), t('Sab')][v] })), d.recordingDay != null ? d.recordingDay : 5, (v) => { d.recordingDay = v; save(); }))),
         valid: () => true,
       },
       { // 5
-        eyebrow: 'Preferenze', title: 'Come ti piace imparare?', lead: 'Testi ed esempi parleranno dei temi che ti interessano.',
+        eyebrow: t('Preferenze'), title: t('Come ti piace imparare?'), lead: t('Testi ed esempi parleranno dei temi che ti interessano.'),
         body: () => {
           const styles = [
-            { v: 'practical', t: 'Pratico', s: 'Pochi concetti, tanti esercizi brevi' },
-            { v: 'balanced', t: 'Equilibrato', s: 'Spiegazioni brevi e pratica' },
-            { v: 'deep', t: 'Approfondito', s: 'Il perché di ogni esercizio, più teoria' },
+            { v: 'practical', t: t('Pratico'), s: t('Pochi concetti, tanti esercizi brevi') },
+            { v: 'balanced', t: t('Equilibrato'), s: t('Spiegazioni brevi e pratica') },
+            { v: 'deep', t: t('Approfondito'), s: t('Il perché di ogni esercizio, più teoria') },
           ];
           const list = h('div.choice-list');
           const drawStyles = () => {
@@ -411,30 +444,30 @@
           };
           drawStyles();
           const chipsWrap = h('div');
-          const drawChips = () => { chipsWrap.textContent = ''; chipsWrap.appendChild(chipGroup([...new Set(INTEREST_SUGGESTIONS.concat(d.interests))].map((x) => ({ id: x, label: x })), d.interests, 8, save)); };
+          const drawChips = () => { chipsWrap.textContent = ''; chipsWrap.appendChild(chipGroup([...new Set(INTEREST_SUGGESTIONS.map((x) => t(x)).concat(d.interests))].map((x) => ({ id: x, label: x })), d.interests, 8, save)); };
           drawChips();
-          const custom = h('input', { type: 'text', maxlength: '40', placeholder: 'Aggiungi un tema…', 'aria-label': 'Aggiungi un tema' });
+          const custom = h('input', { type: 'text', maxlength: '40', placeholder: t('Aggiungi un tema…'), 'aria-label': t('Aggiungi un tema') });
           const addCustom = () => {
             const v = custom.value.trim();
             if (!v) return;
-            if (!d.interests.includes(v)) { if (d.interests.length >= 8) return toast('Massimo 8 temi.'); d.interests.push(v); }
+            if (!d.interests.includes(v)) { if (d.interests.length >= 8) return toast(t('Massimo 8 temi.')); d.interests.push(v); }
             custom.value = ''; save(); drawChips();
           };
           custom.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addCustom(); } });
           return h('div.stack',
-            h('div.field.stack', h('b', 'Stile'), list),
-            h('div.field.stack', h('b', 'Temi che ti interessano'), chipsWrap, h('div.row', custom, h('button.btn.small', { type: 'button', onclick: addCustom }, 'Aggiungi'))),
-            h('div.field.stack', h('b', 'Tono del feedback'), segmented([{ v: 'encouraging', l: 'Incoraggiante' }, { v: 'direct', l: 'Diretto' }], d.feedbackTone || 'encouraging', (v) => { d.feedbackTone = v; save(); })));
+            h('div.field.stack', h('b', t('Stile')), list),
+            h('div.field.stack', h('b', t('Temi che ti interessano')), chipsWrap, h('div.row', custom, h('button.btn.small', { type: 'button', onclick: addCustom }, t('Aggiungi')))),
+            h('div.field.stack', h('b', t('Tono del feedback')), segmented([{ v: 'encouraging', l: t('Incoraggiante') }, { v: 'direct', l: t('Diretto') }], d.feedbackTone || 'encouraging', (v) => { d.feedbackTone = v; save(); })));
         },
         valid: () => true,
       },
       { // 6
-        eyebrow: 'Riepilogo', title: edit ? 'Le tue preferenze' : 'Tutto pronto', lead: edit ? 'Salvale per usarle nei prossimi esercizi, oppure rigenera il percorso da capo.' : 'L\'AI ora scrive il tuo percorso. Ci vuole circa un minuto.',
+        eyebrow: t('Riepilogo'), title: edit ? t('Le tue preferenze') : t('Tutto pronto'), lead: edit ? t('Salvale per usarle nei prossimi esercizi, oppure rigenera il percorso da capo.') : t('L\'AI ora scrive il tuo percorso. Ci vuole circa un minuto.'),
         body: () => h('div.card', h('dl.kv',
-          h('div', h('dt', 'Obiettivi'), h('dd', d.goals.map((g) => labelOf(M.goals, g)).concat(d.goalText ? [`"${d.goalText}"`] : []).join(' · ') || '—')),
-          h('div', h('dt', 'Contesto'), h('dd', [d.role, ...d.situations.map((s) => labelOf(M.situations, s))].filter(Boolean).join(' · ') || '—')),
-          h('div', h('dt', 'Tempo'), h('dd', `${d.minutesPerDay || 15} min al giorno · ${d.daysPerWeek || 5} giorni a settimana · ${d.weeks || 8} settimane`)),
-          h('div', h('dt', 'Temi'), h('dd', d.interests.join(', ') || '—')))),
+          h('div', h('dt', t('Obiettivi')), h('dd', d.goals.map((g) => labelOf(M.goals, g)).concat(d.goalText ? [`"${d.goalText}"`] : []).join(' · ') || '—')),
+          h('div', h('dt', t('Contesto')), h('dd', [d.role, ...d.situations.map((s) => labelOf(M.situations, s))].filter(Boolean).join(' · ') || '—')),
+          h('div', h('dt', t('Tempo')), h('dd', t('{m} min al giorno · {d} giorni a settimana · {w} settimane', { m: d.minutesPerDay || 15, d: d.daysPerWeek || 5, w: d.weeks || 8 }))),
+          h('div', h('dt', t('Temi')), h('dd', d.interests.join(', ') || '—')))),
         valid: () => true,
       },
     ];
@@ -443,9 +476,10 @@
       const btns = $app.querySelectorAll('.onb-actions button');
       btns.forEach((b) => { b.disabled = true; });
       try {
+        d.uiLang = I18N.lang;
         const r = await api('PUT', '/api/preferences', { preferences: d });
         S.me.user.preferences = r.preferences; S.me.user.hasPreferences = true;
-        if (!regenerate) { toast('Preferenze salvate.'); location.hash = '#/settings'; return; }
+        if (!regenerate) { toast(t('Preferenze salvate.')); location.hash = '#/settings'; return; }
         await api('POST', '/api/path/generate');
         store.del('onb'); store.del('onbStep');
         S.me.path = { status: 'generating' };
@@ -462,19 +496,19 @@
       mount(h('div.onb',
         h('div.onb-top',
           h('div.progress', h('span', { style: `width:${Math.round(((i + 1) / steps.length) * 100)}%` })),
-          h('div.eyebrow', `${st.eyebrow} · ${i + 1} di ${steps.length}`)),
+          h('div.eyebrow', `${st.eyebrow} · ${t('{a} di {b}', { a: i + 1, b: steps.length })}`)),
         h('div.stack', h('h1', st.title), h('p.lead', st.lead)),
         st.body(),
         h('div.onb-actions',
-          i > first ? h('button.btn.ghost', { type: 'button', onclick: () => { i--; save(); draw(); } }, 'Indietro') : (edit ? h('a.btn.ghost', { href: '#/settings' }, 'Annulla') : h('span')),
+          i > first ? h('button.btn.ghost', { type: 'button', onclick: () => { i--; save(); draw(); } }, t('Indietro')) : (edit ? h('a.btn.ghost', { href: '#/settings' }, t('Annulla')) : h('span')),
           last
             ? h('div.row',
-              edit && h('button.btn', { type: 'button', onclick: () => submit(false) }, 'Salva'),
+              edit && h('button.btn', { type: 'button', onclick: () => submit(false) }, t('Salva')),
               h('button.btn.primary', { type: 'button', onclick: () => {
-                if (edit && !confirm('Il percorso attuale verrà archiviato e ne sarà creato uno nuovo. Le registrazioni restano nello storico. Procedere?')) return;
+                if (edit && !confirm(t('Il percorso attuale verrà archiviato e ne sarà creato uno nuovo. Le registrazioni restano nello storico. Procedere?'))) return;
                 submit(true);
-              } }, edit ? 'Salva e rigenera il percorso' : 'Crea il mio percorso'))
-            : h('button.btn.primary', { type: 'button', onclick: () => { if (!st.valid()) return toast(st.invalidMsg || 'Completa il passo.'); i++; save(); draw(); } }, st.next || 'Avanti'))));
+              } }, edit ? t('Salva e rigenera il percorso') : t('Crea il mio percorso')))
+            : h('button.btn.primary', { type: 'button', onclick: () => { if (!st.valid()) return toast(st.invalidMsg || t('Completa il passo.')); i++; save(); draw(); } }, st.next || t('Avanti')))));
     }
     draw();
   }
@@ -482,10 +516,10 @@
   /* ================= generation & plan ================= */
 
   function viewGenerating() {
-    const msgs = ['Leggo i tuoi obiettivi e il tuo contesto', 'Scelgo il focus di ogni settimana', 'Preparo la routine quotidiana', 'Scrivo le sfide reali e le tracce di registrazione', 'Rileggo il percorso'];
+    const msgs = [t('Leggo i tuoi obiettivi e il tuo contesto'), t('Scelgo il focus di ogni settimana'), t('Preparo la routine quotidiana'), t('Scrivo le sfide reali e le tracce di registrazione'), t('Rileggo il percorso')];
     const items = msgs.map((m) => h('li', m));
     const list = h('ul.gen-steps', items);
-    const box = h('div.generating', h('div.pulse', h('i')), h('h1', 'Sto creando il tuo percorso'), h('p.lead', 'Di solito ci vuole meno di un minuto. Puoi lasciare aperta questa pagina.'), list);
+    const box = h('div.generating', h('div.pulse', h('i')), h('h1', t('Sto creando il tuo percorso')), h('p.lead', t('Di solito ci vuole meno di un minuto. Puoi lasciare aperta questa pagina.')), list);
     mount(box);
     let k = 0;
     const mark = () => items.forEach((li, j) => { li.className = j < k ? 'done' : j === k ? 'on' : ''; });
@@ -499,9 +533,9 @@
         S.me.path = path;
         if (path && path.status === 'ready') { location.hash = S.me.user.onboarded ? '#/path' : '#/'; if (!S.me.user.onboarded) render(); return; }
         if (!path || path.status === 'failed') {
-          mount(h('div.generating', h('h1', 'Non sono riuscito a creare il percorso'), h('p.lead', (path && path.error) || 'Riprova tra poco.'),
-            h('div.row', h('button.btn.primary', { onclick: async () => { try { await api('POST', '/api/path/generate'); render(); } catch (e) { toast(e.message); } } }, 'Riprova'),
-              h('a.btn', { href: '#/onboarding' }, 'Modifica le preferenze'))));
+          mount(h('div.generating', h('h1', t('Non sono riuscito a creare il percorso')), h('p.lead', (path && path.error) || t('Riprova tra poco.')),
+            h('div.row', h('button.btn.primary', { onclick: async () => { try { await api('POST', '/api/path/generate'); render(); } catch (e) { toast(e.message); } } }, t('Riprova')),
+              h('a.btn', { href: '#/onboarding' }, t('Modifica le preferenze')))));
           return;
         }
       } catch (e) { /* keep polling */ }
@@ -517,15 +551,15 @@
       return h('li.tl-item', { class: state || null },
         h('div.tl-num', state === 'done' ? icon('check') : String(w.week)),
         h('div.tl-body',
-          h('div.row', h('b', w.focus), state === 'now' && h('span.pill.accent', 'Questa settimana'), ...(w.structures || []).map((s) => h('span.pill', s))),
+          h('div.row', h('b', w.focus), state === 'now' && h('span.pill.accent', t('Questa settimana')), ...(w.structures || []).map((s) => h('span.pill', s))),
           h('p.small', w.objective),
-          h('details', h('summary', 'Dettagli'),
+          h('details', h('summary', t('Dettagli')),
             h('dl.kv',
-              h('div', h('dt', 'Perché'), h('dd', w.why)),
-              h('div', h('dt', 'Esercizio aggiuntivo'), h('dd', w.extra_exercise)),
-              h('div', h('dt', 'Sfida reale'), h('dd', w.real_challenge)),
-              h('div', h('dt', 'Registrazione'), h('dd', w.recording_prompt)),
-              h('div', h('dt', 'Una correzione alla volta'), h('dd', w.tip))))));
+              h('div', h('dt', t('Perché')), h('dd', w.why)),
+              h('div', h('dt', t('Esercizio aggiuntivo')), h('dd', w.extra_exercise)),
+              h('div', h('dt', t('Sfida reale')), h('dd', w.real_challenge)),
+              h('div', h('dt', t('Registrazione')), h('dd', w.recording_prompt)),
+              h('div', h('dt', t('Una correzione alla volta')), h('dd', w.tip))))));
     }));
   }
 
@@ -533,11 +567,11 @@
     const total = plan.routine.reduce((a, s) => a + s.minutes, 0);
     return h('div.stack-lg',
       h('div.stack', h('p.lead', plan.summary),
-        h('div.card.quiet', h('div.eyebrow', 'Obiettivi'), h('ul.clean', { style: 'margin-top:8px' }, plan.goals.map((g) => h('li', g))))),
-      h('section.stack', h('div.section-head', h('h2', 'Routine quotidiana'), h('span.muted.small', `${total} minuti`)),
+        h('div.card.quiet', h('div.eyebrow', t('Obiettivi')), h('ul.clean', { style: 'margin-top:8px' }, plan.goals.map((g) => h('li', g))))),
+      h('section.stack', h('div.section-head', h('h2', t('Routine quotidiana')), h('span.muted.small', t('{n} minuti', { n: total }))),
         h('div.card', h('div.list', plan.routine.map((s, j) => h('div.list-item', h('div.icon-circle', String(j + 1)), h('div.grow', h('b', s.title), h('span.small.muted', s.instructions)), h('span.pill', `${s.minutes} min`)))))),
-      h('section.stack', h('h2', `${plan.weeks.length} settimane`), weekTimeline(plan, pos)),
-      plan.habits && plan.habits.length ? h('section.stack', h('h2', 'Le abitudini da portarti dietro'), h('ul.clean', plan.habits.map((x) => h('li', x)))) : null);
+      h('section.stack', h('h2', t('{n} settimane', { n: plan.weeks.length })), weekTimeline(plan, pos)),
+      plan.habits && plan.habits.length ? h('section.stack', h('h2', t('Le abitudini da portarti dietro')), h('ul.clean', plan.habits.map((x) => h('li', x)))) : null);
   }
 
   function viewPlanPreview(p) {
@@ -548,14 +582,14 @@
         try { await api('POST', '/api/path/accept', { day: todayKey() }); await refreshMe(); location.hash = '#/'; render(); }
         catch (e) { toast(e.message); start.disabled = false; }
       },
-    }, 'Inizia il percorso');
+    }, t('Inizia il percorso'));
     mount(h('div.stack-lg',
-      h('div.stack', h('div.eyebrow', 'Il tuo percorso'), h('h1', plan.title)),
+      h('div.stack', h('div.eyebrow', t('Il tuo percorso')), h('h1', plan.title)),
       planBody(plan, null),
       h('div.onb-actions',
-        h('button.btn.ghost', { onclick: () => { location.hash = '#/onboarding'; viewOnboarding({}); } }, 'Modifica le risposte'),
+        h('button.btn.ghost', { onclick: () => { location.hash = '#/onboarding'; viewOnboarding({}); } }, t('Modifica le risposte')),
         h('div.row',
-          h('button.btn', { onclick: async () => { try { await api('POST', '/api/path/generate'); S.me.path = { status: 'generating' }; render(); } catch (e) { toast(e.message); } } }, 'Rigenera'),
+          h('button.btn', { onclick: async () => { try { await api('POST', '/api/path/generate'); S.me.path = { status: 'generating' }; render(); } catch (e) { toast(e.message); } } }, t('Rigenera')),
           start))));
   }
 
@@ -568,14 +602,14 @@
     const pos = position(path.startDate, path.weeks);
     mount(h('div.stack-lg',
       h('div.stack',
-        h('div.eyebrow', pos.finished ? 'Percorso completato' : `Settimana ${pos.week} di ${path.weeks}`),
+        h('div.eyebrow', pos.finished ? t('Percorso completato') : t('Settimana {a} di {b}', { a: pos.week, b: path.weeks })),
         h('h1', path.plan.title),
         h('div.progress', h('span', { style: `width:${Math.min(100, Math.round(((pos.dayIndex + 1) / (path.weeks * 7)) * 100))}%` }))),
       planBody(path.plan, pos),
       h('div.card.quiet.stack',
-        h('h3', 'Vuoi cambiare direzione?'),
-        h('p.small.muted', 'Puoi modificare le preferenze e rigenerare il percorso. Quello attuale viene archiviato: le registrazioni restano nello storico.'),
-        h('div.row', h('a.btn', { href: '#/onboarding' }, 'Modifica le preferenze e rigenera')))));
+        h('h3', t('Vuoi cambiare direzione?')),
+        h('p.small.muted', t('Puoi modificare le preferenze e rigenerare il percorso. Quello attuale viene archiviato: le registrazioni restano nello storico.')),
+        h('div.row', h('a.btn', { href: '#/onboarding' }, t('Modifica le preferenze e rigenera'))))));
   }
 
   /* ================= today ================= */
@@ -600,69 +634,69 @@
       try {
         const r = await api('POST', '/api/today/progress', Object.assign({ day: data.day }, progressState));
         progressState.routineDone = r.routineDone;
-        streakEl.textContent = r.streak.current ? `${r.streak.current} ${r.streak.current === 1 ? 'giorno' : 'giorni'} di fila` : 'Inizia la tua serie oggi';
-        if (r.routineDone && !data.progress.routineDone) { toast('Routine completata. Ottimo lavoro.'); data.progress.routineDone = true; }
+        streakEl.textContent = r.streak.current ? t(r.streak.current === 1 ? '{n} giorno di fila' : '{n} giorni di fila', { n: r.streak.current }) : t('Inizia la tua serie oggi');
+        if (r.routineDone && !data.progress.routineDone) { toast(t('Routine completata. Ottimo lavoro.')); data.progress.routineDone = true; }
       } catch (e) { toast(e.message); }
     }
 
-    const streakEl = h('span.pill', data.streak.current ? `${data.streak.current} ${data.streak.current === 1 ? 'giorno' : 'giorni'} di fila` : 'Inizia la tua serie oggi');
+    const streakEl = h('span.pill', data.streak.current ? t(data.streak.current === 1 ? '{n} giorno di fila' : '{n} giorni di fila', { n: data.streak.current }) : t('Inizia la tua serie oggi'));
     const hero = h('section.hero',
-      h('div.eyebrow', pos.finished ? 'Percorso completato' : `Settimana ${pos.week} di ${total} · giorno ${pos.dayIndex + 1}`),
+      h('div.eyebrow', pos.finished ? t('Percorso completato') : t('Settimana {a} di {b} · giorno {d}', { a: pos.week, b: total, d: pos.dayIndex + 1 })),
       h('h1', week.focus),
       h('p.lead', week.objective),
       h('div.progress', h('span', { style: `width:${Math.min(100, Math.round(((pos.dayIndex + 1) / (total * 7)) * 100))}%` })),
-      h('div.hero-meta', streakEl, h('span', `${stats.routineDays} su ${S.me.user.preferences.daysPerWeek} giorni di routine questa settimana`)));
+      h('div.hero-meta', streakEl, h('span', t('{a} su {b} giorni di routine questa settimana', { a: stats.routineDays, b: S.me.user.preferences.daysPerWeek }))));
 
     const cards = [];
     if (pos.finished) {
-      cards.push(h('div.card.accent.stack', h('h2', 'Hai completato il percorso'), h('p', 'Confronta il punto zero con le registrazioni finali e scegli le abitudini da mantenere.'),
-        h('div.row', h('a.btn.primary', { href: '#/progress' }, 'Vedi i progressi'), h('a.btn', { href: '#/onboarding' }, 'Crea un nuovo percorso'))));
+      cards.push(h('div.card.accent.stack', h('h2', t('Hai completato il percorso')), h('p', t('Confronta il punto zero con le registrazioni finali e scegli le abitudini da mantenere.')),
+        h('div.row', h('a.btn.primary', { href: '#/progress' }, t('Vedi i progressi')), h('a.btn', { href: '#/onboarding' }, t('Crea un nuovo percorso')))));
     }
 
     // Point zero / final comparison
     const clipCard = (kind, done, title, text) => h('section.card.stack',
-      h('div.section-head', h('h2', title), h('span.muted.small', `${done.length} di ${M.baselineClips.length}`)),
+      h('div.section-head', h('h2', title), h('span.muted.small', t('{a} di {b}', { a: done.length, b: M.baselineClips.length }))),
       h('p.small.muted', text),
       h('div.list', M.baselineClips.map((clip) => {
         const ok = done.includes(clip.key);
         return h('a.list-item', { href: ok ? '#/progress' : `#/record?kind=${kind}&key=${clip.key}` },
           h('div.icon-circle', ok ? icon('check') : icon('mic')),
           h('div.grow', h('b', `${clip.title} · ${clip.minutes} min`), h('span.small.muted', clip.prompt)),
-          ok ? h('span.pill.good', 'Fatta') : h('span.btn.small', 'Registra'));
+          ok ? h('span.pill.good', t('Fatta')) : h('span.btn.small', t('Registra')));
       })));
     if (stats.baselineDone.length < M.baselineClips.length) {
-      cards.push(clipCard('baseline', stats.baselineDone, 'Il tuo punto zero', 'Tre registrazioni con il telefono o il computer: sono il riferimento con cui confronterai l\'ultima settimana.'));
+      cards.push(clipCard('baseline', stats.baselineDone, t('Il tuo punto zero'), t('Tre registrazioni con il telefono o il computer: sono il riferimento con cui confronterai l\'ultima settimana.')));
     }
     if ((pos.week === total || pos.finished) && stats.finalDone.length < M.baselineClips.length) {
-      cards.push(clipCard('final', stats.finalDone, 'Confronto finale', 'Rifai le tre registrazioni di partenza: vedrai quanto sei cambiato.'));
+      cards.push(clipCard('final', stats.finalDone, t('Confronto finale'), t('Rifai le tre registrazioni di partenza: vedrai quanto sei cambiato.')));
     }
 
     // Focus of the day
     cards.push(h('section.card.stack',
-      h('div.eyebrow', 'Oggi pensa a una cosa sola'),
+      h('div.eyebrow', t('Oggi pensa a una cosa sola')),
       c ? h('p.focus-quote', c.focus_tip) : h('div.skeleton', { style: 'height:22px;width:80%' }),
       h('p.small.muted', week.tip)));
 
     // Routine
     const stepsList = h('ul.steps');
-    const placeholder = () => h('div.stack', h('div.skeleton', { style: 'width:90%' }), h('div.skeleton', { style: 'width:70%' }), h('p.small.muted', data.contentStatus === 'failed' ? '' : 'Sto preparando gli esercizi di oggi…'));
+    const placeholder = () => h('div.stack', h('div.skeleton', { style: 'width:90%' }), h('div.skeleton', { style: 'width:70%' }), h('p.small.muted', data.contentStatus === 'failed' ? '' : t('Sto preparando gli esercizi di oggi…')));
     function stepContent(s) {
       if (s.kind === 'breath') return breathPacer(s.minutes);
       if (!c) return placeholder();
-      if (s.kind === 'twister') return h('ol.twisters', c.tongue_twisters.map((t) => h('li', t)));
+      if (s.kind === 'twister') return h('ol.twisters', c.tongue_twisters.map((tw) => h('li', tw)));
       if (s.kind === 'reading') {
         const text = h('p.reading');
-        c.reading.text.split(/\s\/\s?/).forEach((part, j, arr) => { text.appendChild(document.createTextNode(part)); if (j < arr.length - 1) text.appendChild(h('span.pause', { 'aria-label': 'pausa' }, ' / ')); });
-        return h('div.stack', h('h3', c.reading.title), h('p.small.muted', 'Le barre / sono le pause. Il primo minuto con una penna tra i denti, poi senza.'), text);
+        c.reading.text.split(/\s\/\s?/).forEach((part, j, arr) => { text.appendChild(document.createTextNode(part)); if (j < arr.length - 1) text.appendChild(h('span.pause', { 'aria-label': t('pausa') }, ' / ')); });
+        return h('div.stack', h('h3', c.reading.title), h('p.small.muted', t('Le barre / sono le pause. Il primo minuto con una penna tra i denti, poi senza.')), text);
       }
-      if (s.kind === 'improv') return h('div.stack', h('div.words', c.improv_words.map((w) => h('span.word', w))), h('p.small.muted', 'Scegline una e parla per 60 secondi. Quando senti arrivare un "eh", fai una pausa muta.'), timer(1, 'Avvia 60 secondi'));
+      if (s.kind === 'improv') return h('div.stack', h('div.words', c.improv_words.map((w) => h('span.word', w))), h('p.small.muted', t('Scegline una e parla per 60 secondi. Quando senti arrivare un "eh", fai una pausa muta.')), timer(1, t('Avvia 60 secondi')));
       if (s.kind === 'structure') {
         const st = M.structures.find((x) => x.id === c.structure_drill.structure);
         return h('div.stack',
           h('div.row', h('span.pill.accent', st ? st.name : c.structure_drill.structure), st && h('span.small.muted', st.scheme)),
           h('p.focus-quote', c.structure_drill.question),
           h('p.small', c.structure_drill.hint),
-          h('div.row', h('a.btn.small', { href: '#/record?kind=practice&prompt=' + encodeURIComponent(c.structure_drill.question) }, icon('mic'), 'Rispondi registrandoti')));
+          h('div.row', h('a.btn.small', { href: '#/record?kind=practice&prompt=' + encodeURIComponent(c.structure_drill.question) }, icon('mic'), t('Rispondi registrandoti'))));
       }
       if (s.kind === 'other' && c.extra) return h('p', c.extra);
       return null;
@@ -672,7 +706,7 @@
       const li = h('li.step', { class: done() ? 'done' : null });
       if (openSteps.has(s.id)) li.setAttribute('open', '');
       const check = h('button.check', {
-        type: 'button', role: 'checkbox', 'aria-checked': String(done()), 'aria-label': `Segna "${s.title}" come fatto`,
+        type: 'button', role: 'checkbox', 'aria-checked': String(done()), 'aria-label': t('Segna "{x}" come fatto', { x: s.title }),
         onclick: (e) => {
           e.stopPropagation();
           const k = progressState.stepsDone.indexOf(s.id);
@@ -697,37 +731,37 @@
       stepsList.appendChild(li);
     });
     const routineSection = h('section.stack',
-      h('div.section-head', h('h2', 'Routine di oggi'), h('span.muted.small', `${data.routine.reduce((a, s) => a + s.minutes, 0)} minuti`)),
-      data.contentStatus === 'failed' && h('div.notice.warn', h('span', data.contentError || 'Non sono riuscito a preparare gli esercizi.'), h('button.linkbtn', { onclick: async () => { try { await api('GET', '/api/today?retry=1&day=' + todayKey()); render(); } catch (e) { toast(e.message); } } }, 'Riprova')),
+      h('div.section-head', h('h2', t('Routine di oggi')), h('span.muted.small', t('{n} minuti', { n: data.routine.reduce((a, s) => a + s.minutes, 0) }))),
+      data.contentStatus === 'failed' && h('div.notice.warn', h('span', data.contentError || t('Non sono riuscito a preparare gli esercizi.')), h('button.linkbtn', { onclick: async () => { try { await api('GET', '/api/today?retry=1&day=' + todayKey()); render(); } catch (e) { toast(e.message); } } }, t('Riprova'))),
       stepsList);
     cards.push(routineSection);
 
     // Week: extra exercise + real challenge + weekly recording
     const chCheck = h('button.check', {
-      type: 'button', role: 'checkbox', 'aria-checked': String(stats.challengeDone || progressState.challengeDone), 'aria-label': 'Sfida fatta',
+      type: 'button', role: 'checkbox', 'aria-checked': String(stats.challengeDone || progressState.challengeDone), 'aria-label': t('Sfida fatta'),
       onclick: () => { progressState.challengeDone = !(chCheck.getAttribute('aria-checked') === 'true'); chCheck.setAttribute('aria-checked', String(progressState.challengeDone)); saveProgress(); },
     }, icon('check'));
     cards.push(h('section.grid-2',
-      h('div.card.stack', h('div.eyebrow', 'Esercizio della settimana'), h('p', c ? c.extra : week.extra_exercise)),
-      h('div.card.stack', h('div.eyebrow', 'Sfida reale'), h('p', week.real_challenge),
-        h('div.row', chCheck, h('span.small', stats.challengeDone ? 'Fatta questa settimana' : 'Segna quando l\'hai fatta')))));
+      h('div.card.stack', h('div.eyebrow', t('Esercizio della settimana')), h('p', c ? c.extra : week.extra_exercise)),
+      h('div.card.stack', h('div.eyebrow', t('Sfida reale')), h('p', week.real_challenge),
+        h('div.row', chCheck, h('span.small', stats.challengeDone ? t('Fatta questa settimana') : t('Segna quando l\'hai fatta'))))));
 
     if (stats.baselineDone.length >= M.baselineClips.length || pos.week > 1) {
       cards.push(stats.weeklyRecordingDone
-        ? h('section.card.quiet.row.between', h('div', h('b', 'Registrazione della settimana fatta'), h('p.small.muted', 'Riascoltala e confrontala con le precedenti.')), h('a.btn.small', { href: '#/progress' }, 'Progressi'))
+        ? h('section.card.quiet.row.between', h('div', h('b', t('Registrazione della settimana fatta')), h('p.small.muted', t('Riascoltala e confrontala con le precedenti.'))), h('a.btn.small', { href: '#/progress' }, t('Progressi')))
         : h('section.card.stack', { class: data.isRecordingDay ? 'accent' : null },
-          h('div.row.between', h('div.eyebrow', 'Registrazione della settimana'), data.isRecordingDay && h('span.pill.accent', 'Oggi')),
+          h('div.row.between', h('div.eyebrow', t('Registrazione della settimana')), data.isRecordingDay && h('span.pill.accent', t('Oggi'))),
           h('p.focus-quote', week.recording_prompt),
-          h('p.small.muted', 'Circa 2 minuti. Dopo la registrazione vedrai velocità, intercalari e pause, e il coach AI ti darà una sola correzione su cui lavorare.'),
-          h('div', h('a.btn.primary', { href: '#/record?kind=weekly' }, icon('mic'), 'Registra'))));
+          h('p.small.muted', t('Circa 2 minuti. Dopo la registrazione vedrai velocità, intercalari e pause, e il coach AI ti darà una sola correzione su cui lavorare.')),
+          h('div', h('a.btn.primary', { href: '#/record?kind=weekly' }, icon('mic'), t('Registra')))));
     }
-    cards.push(h('p.small.muted', { style: 'text-align:center' }, 'Vuoi allenarti ancora? ', h('a', { href: '#/record?kind=practice' }, 'Registra una pratica libera')));
+    cards.push(h('p.small.muted', { style: 'text-align:center' }, t('Vuoi allenarti ancora? '), h('a', { href: '#/record?kind=practice' }, t('Registra una pratica libera'))));
 
     mount(h('div.stack-lg', hero, ...cards));
 
     if (data.contentStatus === 'generating') {
-      const t = setTimeout(() => { if (parseHash().parts[0] == null || parseHash().parts[0] === 'today') render(); }, 3500);
-      onLeave(() => clearTimeout(t));
+      const refresh = setTimeout(() => { if (parseHash().parts[0] == null || parseHash().parts[0] === 'today') render(); }, 3500);
+      onLeave(() => clearTimeout(refresh));
     }
   }
 
@@ -743,9 +777,9 @@
     } else if (kind === 'weekly') {
       const p = S.me.path;
       const pos = p ? position(p.startDate, p.weeks) : null;
-      prompt = p && p.plan ? p.plan.weeks[pos.week - 1].recording_prompt : 'Parla per due minuti del tuo lavoro.';
+      prompt = p && p.plan ? p.plan.weeks[pos.week - 1].recording_prompt : t('Parla per due minuti del tuo lavoro.');
     } else {
-      prompt = (q.get('prompt') || '').slice(0, 400) || 'Parla liberamente per uno o due minuti: racconta cosa hai fatto oggi, o spiega un\'idea a cui tieni.';
+      prompt = (q.get('prompt') || '').slice(0, 400) || t('Parla liberamente per uno o due minuti: racconta cosa hai fatto oggi, o spiega un\'idea a cui tieni.');
       minutes = 1;
     }
     const supported = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
@@ -755,17 +789,19 @@
 
     const timeEl = h('div.rec-time', '0:00');
     const meter = h('div.meter', { 'aria-hidden': 'true' }, Array.from({ length: 24 }, () => h('i')));
-    const live = h('p.live-transcript', useBrowserSR ? 'La trascrizione apparirà qui mentre parli.' : (M.serverTranscription ? 'La trascrizione arriverà dopo la registrazione.' : 'Il tuo browser non trascrive la voce: potrai scrivere il testo dopo.'));
-    const btn = h('button.rec-btn', { type: 'button', 'aria-label': 'Inizia a registrare' }, icon('mic'));
-    const status = h('p.small.muted', `Durata consigliata: ${minutes} ${minutes === 1 ? 'minuto' : 'minuti'}. Premi per iniziare.`);
-    const cancel = h('a.btn.ghost', { href: kind === 'practice' ? '#/' : '#/' }, 'Annulla');
+    const NO_SR_MSG = t('Questo browser (per esempio Firefox) non trascrive la voce. La registrazione funziona lo stesso: dopo potrai scrivere tu il testo, che serve per misurare velocità e intercalari. Per la trascrizione automatica usa Chrome, Edge o Safari.');
+    const live = h('p.live-transcript', useBrowserSR ? t('La trascrizione apparirà qui mentre parli.') : (M.serverTranscription ? t('La trascrizione arriverà dopo la registrazione.') : ''));
+    const noSrNotice = h('div.notice.warn', NO_SR_MSG);
+    const btn = h('button.rec-btn', { type: 'button', 'aria-label': t('Inizia a registrare') }, icon('mic'));
+    const status = h('p.small.muted', t(minutes === 1 ? 'Durata consigliata: {n} minuto. Premi per iniziare.' : 'Durata consigliata: {n} minuti. Premi per iniziare.', { n: minutes }));
+    const cancel = h('a.btn.ghost', { href: kind === 'practice' ? '#/' : '#/' }, t('Annulla'));
 
     mount(h('div.stack-lg',
-      h('a.btn.ghost.small', { href: '#/', style: 'justify-self:start' }, icon('back'), 'Indietro'),
-      h('div.stack', h('div.eyebrow', KIND_LABEL[kind]), h('p.focus-quote', { style: 'font-size:1.45rem' }, prompt)),
+      h('a.btn.ghost.small', { href: '#/', style: 'justify-self:start' }, icon('back'), t('Indietro')),
+      h('div.stack', h('div.eyebrow', t(KIND_LABEL[kind])), h('p.focus-quote', { style: 'font-size:1.45rem' }, prompt)),
       supported
-        ? h('div.card.recorder', timeEl, meter, btn, status, live)
-        : h('div.notice.warn', 'Questo browser non permette di registrare. Usa una versione recente di Chrome, Edge, Firefox o Safari, su HTTPS.'),
+        ? h('div.stack', !useBrowserSR && !M.serverTranscription && noSrNotice, h('div.card.recorder', timeEl, meter, btn, status, (useBrowserSR || M.serverTranscription) && live))
+        : h('div.notice.warn', t('Questo browser non permette di registrare. Usa una versione recente di Chrome, Edge, Firefox o Safari, su HTTPS.')),
       h('div.row', { style: 'justify-content:center' }, cancel)));
     if (!supported) return;
 
@@ -794,8 +830,16 @@
         live.appendChild(document.createTextNode(finalText.split(' ').slice(-40).join(' ')));
         if (interim) live.appendChild(h('em', ' ' + interim));
       };
-      sr.onerror = () => { /* network / no-speech: keep recording audio anyway */ };
-      sr.onend = () => { if (recording) { try { sr.start(); } catch (e) { /* ignore */ } } }; // Chrome stops after silences
+      // no-speech / aborted are transient. The others mean recognition cannot work here (e.g. Firefox with the
+      // about:config flag on but no recognition service): say so once and keep recording audio anyway.
+      let srDead = false;
+      sr.onerror = (ev) => {
+        if (['not-allowed', 'service-not-allowed', 'language-not-supported', 'network', 'audio-capture'].includes(ev && ev.error)) {
+          srDead = true;
+          if (!finalText) live.textContent = NO_SR_MSG;
+        }
+      };
+      sr.onend = () => { if (recording && !srDead) { try { sr.start(); } catch (e) { /* ignore */ } } }; // Chrome stops after silences
       try { sr.start(); } catch (e) { /* ignore */ }
     }
 
@@ -803,7 +847,7 @@
       try {
         stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
       } catch (e) {
-        status.textContent = 'Non ho accesso al microfono. Controlla i permessi del browser e riprova.';
+        status.textContent = t('Non ho accesso al microfono. Controlla i permessi del browser e riprova.');
         return;
       }
       const mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'].find((m) => MediaRecorder.isTypeSupported(m));
@@ -813,8 +857,8 @@
       rec.onstop = finish;
       rec.start(1000);
       recording = true; t0 = Date.now();
-      btn.classList.add('recording'); btn.textContent = ''; btn.appendChild(icon('stop')); btn.setAttribute('aria-label', 'Ferma la registrazione');
-      status.textContent = 'Sto registrando. Premi di nuovo per terminare.';
+      btn.classList.add('recording'); btn.textContent = ''; btn.appendChild(icon('stop')); btn.setAttribute('aria-label', t('Ferma la registrazione'));
+      status.textContent = t('Sto registrando. Premi di nuovo per terminare.');
       tick = setInterval(() => {
         const s = (Date.now() - t0) / 1000; timeEl.textContent = fmtTime(s);
         if (s >= 900) stop();
@@ -846,22 +890,22 @@
       const duration = (Date.now() - t0) / 1000;
       cleanup();
       btn.disabled = true; btn.classList.remove('recording');
-      if (duration < 3) { status.textContent = 'Registrazione troppo breve. Riprova.'; btn.disabled = false; btn.textContent = ''; btn.appendChild(icon('mic')); return; }
+      if (duration < 3) { status.textContent = t('Registrazione troppo breve. Riprova.'); btn.disabled = false; btn.textContent = ''; btn.appendChild(icon('mic')); return; }
       // Let the last speech-recognition results arrive.
       await new Promise((r) => setTimeout(r, 600));
       const blob = new Blob(chunks, { type: (rec.mimeType || 'audio/webm').split(';')[0] === 'audio/mp4' ? 'audio/mp4' : rec.mimeType || 'audio/webm' });
-      status.textContent = 'Misuro pause e intonazione…';
+      status.textContent = t('Misuro pause e intonazione…');
       let audioMetrics = null;
       try { audioMetrics = await window.AudioMetrics.analyze(blob); } catch (e) { audioMetrics = null; }
       try {
-        status.textContent = 'Salvo la registrazione…';
+        status.textContent = t('Salvo la registrazione…');
         const r = await api('POST', '/api/recordings', {
           kind, promptKey: key, prompt, durationSec: Math.round(duration * 10) / 10, transcript: (finalText + ' ' + interim).trim(), audioMetrics, day: todayKey(),
         });
         await api('PUT', `/api/recordings/${r.id}/audio`, blob);
         if (M.serverTranscription) {
-          status.textContent = 'Trascrivo…';
-          try { await api('POST', `/api/recordings/${r.id}/transcribe`); } catch (e) { toast('Trascrizione non riuscita: potrai scrivere il testo a mano.'); }
+          status.textContent = t('Trascrivo…');
+          try { await api('POST', `/api/recordings/${r.id}/transcribe`); } catch (e) { toast(t('Trascrizione non riuscita: potrai scrivere il testo a mano.')); }
         }
         location.hash = `#/rec/${r.id}?new=1`;
       } catch (e) {
@@ -876,8 +920,8 @@
 
   const speaksEnglish = () => ((S.me && S.me.user.preferences) || {}).speakingLang === 'en';
   function fillerExamples(short) {
-    if (speaksEnglish()) return short ? 'gli "um"' : 'gli "um", gli "uh" e i "like"';
-    return short ? 'gli "eh"' : 'gli "eh" e i "cioè"';
+    if (speaksEnglish()) return t(short ? 'gli "um"' : 'gli "um", gli "uh" e i "like"');
+    return t(short ? 'gli "eh"' : 'gli "eh" e i "cioè"');
   }
 
   function highlightFillers(text, byWord, spans) {
@@ -914,13 +958,13 @@
   }
 
   function metricTiles(m) {
-    const pitchWord = m.pitchStdSt == null ? '' : m.pitchStdSt < 1.5 ? 'piatta' : m.pitchStdSt > 3 ? 'espressiva' : 'moderata';
+    const pitchWord = m.pitchStdSt == null ? '' : m.pitchStdSt < 1.5 ? t('voce piatta') : m.pitchStdSt > 3 ? t('voce espressiva') : t('voce moderata');
     const tile = (label, value, unit, sub) => h('div.tile', h('span.label', label), h('span.value', value, unit && h('small', unit)), sub && h('span.sub', sub));
     return h('div.tiles',
-      tile('Velocità', fmtNum(m.words ? m.wpm : null), 'parole/min', 'obiettivo 130–160'),
-      tile('Intercalari', fmtNum(m.words ? m.fillers.perMin : null, 1), '/min', m.words ? `${m.fillers.total} in totale · obiettivo sotto 3` : 'serve la trascrizione'),
-      tile('Pause', fmtNum(m.pausesPerMin, 1), '/min', m.pausesPerMin != null ? `${m.longPauses || 0} lunghe (oltre 2 s)` : 'non misurate'),
-      tile('Intonazione', fmtNum(m.pitchStdSt, 1), 'semitoni', pitchWord ? `voce ${pitchWord}` : 'non misurata'));
+      tile(t('Velocità'), fmtNum(m.words ? m.wpm : null), t('parole/min'), t('obiettivo 130–160')),
+      tile(t('Intercalari'), fmtNum(m.words ? m.fillers.perMin : null, 1), '/min', m.words ? t('{n} in totale · obiettivo sotto 3', { n: m.fillers.total }) : t('serve la trascrizione')),
+      tile(t('Pause'), fmtNum(m.pausesPerMin, 1), '/min', m.pausesPerMin != null ? t('{n} lunghe (oltre 2 s)', { n: m.longPauses || 0 }) : t('non misurate')),
+      tile(t('Intonazione'), fmtNum(m.pitchStdSt, 1), t('semitoni'), pitchWord ? t(pitchWord) : t('non misurata')));
   }
 
   async function viewRecording(id, q) {
@@ -928,7 +972,7 @@
     let r = await api('GET', `/api/recordings/${encodeURIComponent(id)}`);
     const M = S.meta;
     // Back to the list if that is where the user came from, otherwise to the day in progress.
-    const back = prevRoute === 'progress' ? { href: '#/progress', label: 'Progressi' } : { href: '#/', label: 'Oggi' };
+    const back = prevRoute === 'progress' ? { href: '#/progress', label: t('Progressi') } : { href: '#/', label: t('Oggi') };
     const box = h('div.stack-lg');
     mount(box);
     // Created once: redraws (evaluation, self-scores) keep the same player, so playback and position survive.
@@ -942,19 +986,19 @@
       const tCard = h('section.card.stack');
       const drawTranscript = (editing) => {
         tCard.textContent = '';
-        tCard.appendChild(h('div.section-head', h('h2', 'Trascrizione'),
-          !editing && h('button.linkbtn', { onclick: () => drawTranscript(true) }, r.transcript ? 'Correggi' : 'Scrivi')));
+        tCard.appendChild(h('div.section-head', h('h2', t('Trascrizione')),
+          !editing && h('button.linkbtn', { onclick: () => drawTranscript(true) }, r.transcript ? t('Correggi') : t('Scrivi'))));
         if (editing || !r.transcript) {
-          const ta = h('textarea', { rows: '8', maxlength: '20000', 'aria-label': 'Trascrizione', value: r.transcript || '' });
-          tCard.appendChild(h('p.small.muted', r.transcript ? `Correggi le parole riconosciute male: velocità e intercalari si ricalcolano. Lascia ${fillerExamples()} che hai detto davvero.` : `Nessuna trascrizione automatica. Riascolta e scrivi cosa hai detto (anche ${fillerExamples(true)}): servono per misurare velocità e intercalari.`));
+          const ta = h('textarea', { rows: '8', maxlength: '20000', 'aria-label': t('Trascrizione'), value: r.transcript || '' });
+          tCard.appendChild(h('p.small.muted', r.transcript ? t('Correggi le parole riconosciute male: velocità e intercalari si ricalcolano. Lascia {x} che hai detto davvero.', { x: fillerExamples() }) : t('Nessuna trascrizione automatica (il browser non la supporta: succede per esempio con Firefox). Riascolta e scrivi cosa hai detto (anche {x}): servono per misurare velocità e intercalari.', { x: fillerExamples(true) })));
           tCard.appendChild(ta);
           tCard.appendChild(h('div.row',
-            h('button.btn.primary.small', { onclick: async (e) => { e.target.disabled = true; try { r = await api('PATCH', `/api/recordings/${r.id}`, { transcript: ta.value }); draw(); toast('Trascrizione salvata.'); } catch (er) { toast(er.message); e.target.disabled = false; } } }, 'Salva'),
-            r.transcript && h('button.btn.ghost.small', { onclick: () => drawTranscript(false) }, 'Annulla'),
-            M.serverTranscription && r.hasAudio && h('button.btn.ghost.small', { onclick: async (e) => { e.target.disabled = true; e.target.textContent = 'Trascrivo…'; try { r = await api('POST', `/api/recordings/${r.id}/transcribe`); draw(); } catch (er) { toast(er.message); e.target.disabled = false; e.target.textContent = 'Trascrivi dall\'audio'; } } }, 'Trascrivi dall\'audio')));
+            h('button.btn.primary.small', { onclick: async (e) => { e.target.disabled = true; try { r = await api('PATCH', `/api/recordings/${r.id}`, { transcript: ta.value }); draw(); toast(t('Trascrizione salvata.')); } catch (er) { toast(er.message); e.target.disabled = false; } } }, t('Salva')),
+            r.transcript && h('button.btn.ghost.small', { onclick: () => drawTranscript(false) }, t('Annulla')),
+            M.serverTranscription && r.hasAudio && h('button.btn.ghost.small', { onclick: async (e) => { e.target.disabled = true; e.target.textContent = t('Trascrivo…'); try { r = await api('POST', `/api/recordings/${r.id}/transcribe`); draw(); } catch (er) { toast(er.message); e.target.disabled = false; e.target.textContent = t('Trascrivi dall\'audio'); } } }, t('Trascrivi dall\'audio'))));
         } else {
           tCard.appendChild(highlightFillers(r.transcript, m.fillers && m.fillers.byWord, m.fillers && m.fillers.spans));
-          if (m.fillers && m.fillers.total) tCard.appendChild(h('p.small.muted', 'Evidenziati gli intercalari: ' + Object.entries(m.fillers.byWord).map(([k, v]) => `"${k}" ×${v}`).join(', ')));
+          if (m.fillers && m.fillers.total) tCard.appendChild(h('p.small.muted', t('Evidenziati gli intercalari: ') + Object.entries(m.fillers.byWord).map(([k, v]) => `"${k}" ×${v}`).join(', ')));
         }
       };
       drawTranscript(false);
@@ -963,10 +1007,10 @@
       const ai = (r.evaluation && r.evaluation.scores) || {};
       const measured = m.measuredScores || {};
       const self = Object.assign({}, r.selfScores || {});
-      const SOURCE = { ai: 'coach AI', measured: 'misurato', self: 'tu' };
+      const SOURCE = { ai: t('coach AI'), measured: t('misurato'), self: t('tu') };
       const grid = h('section.card.stack',
-        h('div.section-head', h('h2', 'Griglia di valutazione'), r.avgScore != null && h('span.pill', `media ${fmtNum(r.avgScore, 1)}`)),
-        h('p.small.muted', 'Velocità, intercalari e pause sono misurati; chiarezza, struttura e chiusura li valuta il coach; tono e dizione li valuti tu riascoltandoti.'),
+        h('div.section-head', h('h2', t('Griglia di valutazione')), r.avgScore != null && h('span.pill', t('media {n}', { n: fmtNum(r.avgScore, 1) }))),
+        h('p.small.muted', t('Velocità, intercalari e pause sono misurati; chiarezza, struttura e chiusura li valuta il coach; tono e dizione li valuti tu riascoltandoti.')),
         h('div', M.criteria.map((cr) => {
           const val = cr.source === 'ai' ? ai[cr.id] : cr.source === 'measured' ? measured[cr.id] : self[cr.id];
           const picker = cr.source === 'self'
@@ -980,35 +1024,35 @@
       const aiCard = h('section.card.stack');
       if (ev) {
         add(aiCard, 
-          h('div.section-head', h('h2', 'Il coach'), ev.structure_used && ev.structure_used.toLowerCase() !== 'nessuna' && h('span.pill.accent', ev.structure_used)),
+          h('div.section-head', h('h2', t('Il coach')), ev.structure_used && !['nessuna', 'none'].includes(ev.structure_used.toLowerCase()) && h('span.pill.accent', ev.structure_used)),
           h('p', ev.summary),
-          h('div.stack', h('div.eyebrow', 'La tua prossima correzione'), h('p.correction', ev.one_correction)),
+          h('div.stack', h('div.eyebrow', t('La tua prossima correzione')), h('p.correction', ev.one_correction)),
           h('div.grid-2',
-            h('div.stack', h('h3', 'Cosa funziona'), h('ul.clean', ev.strengths.map((x) => h('li', x)))),
-            h('div.stack', h('h3', 'Cosa migliorare'), h('ul.clean', ev.improvements.map((x) => h('li', x))))),
-          ev.better_opening && h('div.card.quiet.stack', h('div.eyebrow', 'Un\'apertura più forte'), h('p.serif', ev.better_opening)),
-          h('div', h('button.btn.ghost.small', { onclick: evaluate }, 'Valuta di nuovo')));
+            h('div.stack', h('h3', t('Cosa funziona')), h('ul.clean', ev.strengths.map((x) => h('li', x)))),
+            h('div.stack', h('h3', t('Cosa migliorare')), h('ul.clean', ev.improvements.map((x) => h('li', x))))),
+          ev.better_opening && h('div.card.quiet.stack', h('div.eyebrow', t('Un\'apertura più forte')), h('p.serif', ev.better_opening)),
+          h('div', h('button.btn.ghost.small', { onclick: evaluate }, t('Valuta di nuovo'))));
       } else {
-        add(aiCard, h('h2', 'Il coach'),
-          h('p.muted', words >= 15 ? 'Il coach legge la trascrizione e i numeri misurati, dà i voti su chiarezza, struttura e chiusura e ti indica una sola correzione su cui lavorare.' : 'Serve una trascrizione di almeno 15 parole per la valutazione.'),
-          h('div', h('button.btn.accent', { onclick: evaluate, disabled: words < 15 }, icon('sparkle'), 'Valuta con il coach AI')));
+        add(aiCard, h('h2', t('Il coach')),
+          h('p.muted', words >= 15 ? t('Il coach legge la trascrizione e i numeri misurati, dà i voti su chiarezza, struttura e chiusura e ti indica una sola correzione su cui lavorare.') : t('Serve una trascrizione di almeno 15 parole per la valutazione.')),
+          h('div', h('button.btn.accent', { onclick: evaluate, disabled: words < 15 }, icon('sparkle'), t('Valuta con il coach AI'))));
       }
       async function evaluate(e) {
-        const b = e.currentTarget; b.disabled = true; b.textContent = ''; b.appendChild(h('span.spinner')); b.appendChild(document.createTextNode(' Il coach sta leggendo… (20-40 s)'));
+        const b = e.currentTarget; b.disabled = true; b.textContent = ''; b.appendChild(h('span.spinner')); b.appendChild(document.createTextNode(t(' Il coach sta leggendo… (20-40 s)')));
         try { r = await api('POST', `/api/recordings/${r.id}/evaluate`); draw(); }
         catch (er) { toast(er.message); draw(); }
       }
 
       add(box, 
         h('div.row.between', h('a.btn.ghost.small', { href: back.href }, icon('back'), back.label), h('span.muted.small', fmtDate(r.createdAt, { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }))),
-        h('div.stack', h('div.eyebrow', `${KIND_LABEL[r.kind]}${r.week ? ' · settimana ' + r.week : ''} · ${fmtTime(r.durationSec)}`), h('h1', { style: 'font-size:1.5rem' }, r.prompt)),
+        h('div.stack', h('div.eyebrow', `${t(KIND_LABEL[r.kind])}${r.week ? ' · ' + t('settimana {n}', { n: r.week }) : ''} · ${fmtTime(r.durationSec)}`), h('h1', { style: 'font-size:1.5rem' }, r.prompt)),
         player,
         metricTiles(m),
         tCard, aiCard, grid,
         h('div.row', { style: 'justify-content:space-between' },
-          h('a.btn.primary', { href: back.href }, back.href === '#/' ? 'Torna a Oggi' : 'Torna ai progressi'),
-          h('a.btn', { href: `#/record?kind=${r.kind === 'weekly' ? 'practice' : r.kind}${r.promptKey ? '&key=' + r.promptKey : ''}&prompt=${encodeURIComponent(r.prompt)}` }, icon('mic'), 'Registra di nuovo'),
-          h('button.btn.ghost.danger', { onclick: async () => { if (!confirm('Eliminare questa registrazione?')) return; try { await api('DELETE', `/api/recordings/${r.id}`); toast('Registrazione eliminata.'); location.hash = back.href; } catch (e) { toast(e.message); } } }, icon('trash'), 'Elimina')));
+          h('a.btn.primary', { href: back.href }, back.href === '#/' ? t('Torna a Oggi') : t('Torna ai progressi')),
+          h('a.btn', { href: `#/record?kind=${r.kind === 'weekly' ? 'practice' : r.kind}${r.promptKey ? '&key=' + r.promptKey : ''}&prompt=${encodeURIComponent(r.prompt)}` }, icon('mic'), t('Registra di nuovo')),
+          h('button.btn.ghost.danger', { onclick: async () => { if (!confirm(t('Eliminare questa registrazione?'))) return; try { await api('DELETE', `/api/recordings/${r.id}`); toast(t('Registrazione eliminata.')); location.hash = back.href; } catch (e) { toast(e.message); } } }, icon('trash'), t('Elimina'))));
     }
     draw();
     if (q.get('new') === '1' && (r.metrics.words || 0) >= 15 && !r.evaluation) {
@@ -1033,9 +1077,9 @@
     const delta = (a, b, betterLower, digits = 0, inBand) => {
       if (a == null || b == null || first === last) return null;
       const d = b - a;
-      if (Math.abs(d) < Math.pow(10, -digits)) return h('span.delta', 'invariato');
+      if (Math.abs(d) < Math.pow(10, -digits)) return h('span.delta', t('invariato'));
       const good = inBand ? inBand(b) >= inBand(a) : betterLower ? d < 0 : d > 0;
-      return h('span.delta', { class: good ? 'good' : 'bad' }, `${d > 0 ? '+' : '−'}${fmtNum(Math.abs(d), digits)} dall'inizio`);
+      return h('span.delta', { class: good ? 'good' : 'bad' }, t('{d} dall\'inizio', { d: `${d > 0 ? '+' : '−'}${fmtNum(Math.abs(d), digits)}` }));
     };
     const bandCloseness = (v) => -(v < 130 ? 130 - v : v > 160 ? v - 160 : 0);
     const tile = (label, value, unit, extra) => h('div.tile', h('span.label', label), h('span.value', value, unit && h('small', unit)), extra && h('span.sub', extra));
@@ -1044,81 +1088,81 @@
       const holder = h('div');
       const tableRows = points.map((p) => h('tr', h('td', fmtDate(p.x, { day: 'numeric', month: 'short' })), h('td', p.label || ''), h('td.num', opts.format(p.y))));
       const card = h('section.card.stack', h('div', h('h3', title), h('p.small.muted', sub)), holder,
-        h('details', h('summary.small.muted', 'Mostra i dati'), h('div.table-scroll', h('table.grid-table', h('thead', h('tr', h('th', 'Data'), h('th', 'Registrazione'), h('th.num', title))), h('tbody', tableRows)))));
+        h('details', h('summary.small.muted', t('Mostra i dati')), h('div.table-scroll', h('table.grid-table', h('thead', h('tr', h('th', t('Data')), h('th', t('Registrazione')), h('th.num', title))), h('tbody', tableRows)))));
       requestAnimationFrame(() => window.Charts.line(holder, Object.assign({ points, title }, opts)));
       return card;
     };
-    const lbl = (s) => `${KIND_LABEL[s.kind]}${s.week ? ' · sett. ' + s.week : ''}`;
+    const lbl = (s) => `${t(KIND_LABEL[s.kind])}${s.week ? ' · ' + t('sett. {n}', { n: s.week }) : ''}`;
 
     const content = [];
-    content.push(h('div.stack', h('div.eyebrow', 'Progressi'), h('h1', 'Come sta cambiando la tua voce')));
+    content.push(h('div.stack', h('div.eyebrow', t('Progressi')), h('h1', t('Come sta cambiando la tua voce'))));
     if (!data.series.length) {
-      content.push(h('div.card.empty', h('div.icon-circle', icon('mic')), h('h2', 'Ancora nessuna registrazione'), h('p', 'Registra il tuo punto zero: è il riferimento per vedere i progressi.'), h('a.btn.primary', { href: '#/record?kind=baseline&key=explain' }, 'Inizia dal punto zero')));
+      content.push(h('div.card.empty', h('div.icon-circle', icon('mic')), h('h2', t('Ancora nessuna registrazione')), h('p', t('Registra il tuo punto zero: è il riferimento per vedere i progressi.')), h('a.btn.primary', { href: '#/record?kind=baseline&key=explain' }, t('Inizia dal punto zero'))));
       return mount(h('div.stack-lg', content));
     }
     content.push(h('div.tiles',
-      tile('Velocità', fmtNum(last && last.wpm), 'parole/min', delta(first && first.wpm, last && last.wpm, false, 0, bandCloseness) || 'obiettivo 130–160'),
-      tile('Intercalari', fmtNum(last && last.fillersPerMin, 1), '/min', delta(first && first.fillersPerMin, last && last.fillersPerMin, true, 1) || 'obiettivo sotto 3'),
-      tile('Voto medio', fmtNum(last && last.avgScore, 1), 'su 5', delta(first && first.avgScore, last && last.avgScore, false, 1)),
-      tile('Routine', fmtNum(totalRoutine), totalRoutine === 1 ? 'giorno' : 'giorni', `${data.series.length} registrazioni`)));
+      tile(t('Velocità'), fmtNum(last && last.wpm), t('parole/min'), delta(first && first.wpm, last && last.wpm, false, 0, bandCloseness) || t('obiettivo 130–160')),
+      tile(t('Intercalari'), fmtNum(last && last.fillersPerMin, 1), '/min', delta(first && first.fillersPerMin, last && last.fillersPerMin, true, 1) || t('obiettivo sotto 3')),
+      tile(t('Voto medio'), fmtNum(last && last.avgScore, 1), t('su 5'), delta(first && first.avgScore, last && last.avgScore, false, 1)),
+      tile('Routine', fmtNum(totalRoutine), totalRoutine === 1 ? t('giorno') : t('giorni'), t('{n} registrazioni', { n: data.series.length }))));
 
     // AI insight
     const insightCard = h('section.card.accent.stack');
     const drawInsight = (ins) => {
       insightCard.textContent = '';
       if (ins) {
-        add(insightCard, h('div.section-head', h('div.eyebrow', 'Lettura del coach'), h('span.small.muted', fmtDate(ins.createdAt))),
+        add(insightCard, h('div.section-head', h('div.eyebrow', t('Lettura del coach')), h('span.small.muted', fmtDate(ins.createdAt))),
           h('p.focus-quote', ins.headline),
-          h('ul.clean', ins.trends.map((t) => h('li', t))),
-          ins.keep.length ? h('p.small', h('b', 'Continua così: '), ins.keep.join(' · ')) : null,
-          h('p', h('b', 'Prossimo focus: '), ins.next_focus),
-          ins.stale && h('div', h('button.btn.small', { onclick: makeInsight }, 'Aggiorna con le nuove registrazioni')));
+          h('ul.clean', ins.trends.map((x) => h('li', x))),
+          ins.keep.length ? h('p.small', h('b', t('Continua così: ')), ins.keep.join(' · ')) : null,
+          h('p', h('b', t('Prossimo focus: ')), ins.next_focus),
+          ins.stale && h('div', h('button.btn.small', { onclick: makeInsight }, t('Aggiorna con le nuove registrazioni'))));
       } else {
-        add(insightCard, h('h2', 'Cosa dicono i numeri?'), h('p.small', 'Il coach AI confronta le tue registrazioni, dall\'inizio a oggi, e ti dice cosa sta funzionando e su cosa concentrarti.'),
-          h('div', h('button.btn.accent', { onclick: makeInsight, disabled: withText.length < 2 }, icon('sparkle'), withText.length < 2 ? 'Servono almeno 2 registrazioni' : 'Leggi i miei progressi')));
+        add(insightCard, h('h2', t('Cosa dicono i numeri?')), h('p.small', t('Il coach AI confronta le tue registrazioni, dall\'inizio a oggi, e ti dice cosa sta funzionando e su cosa concentrarti.')),
+          h('div', h('button.btn.accent', { onclick: makeInsight, disabled: withText.length < 2 }, icon('sparkle'), withText.length < 2 ? t('Servono almeno 2 registrazioni') : t('Leggi i miei progressi'))));
       }
     };
     async function makeInsight(e) {
-      const b = e.currentTarget; b.disabled = true; b.textContent = ''; b.appendChild(h('span.spinner')); b.appendChild(document.createTextNode(' Analizzo…'));
+      const b = e.currentTarget; b.disabled = true; b.textContent = ''; b.appendChild(h('span.spinner')); b.appendChild(document.createTextNode(t(' Analizzo…')));
       try { drawInsight(await api('POST', '/api/progress/insight', { day: todayKey() })); } catch (er) { toast(er.message); drawInsight(data.insight); }
     }
     drawInsight(data.insight);
     content.push(insightCard);
 
     content.push(h('div.grid-charts',
-      chartCard('Parole al minuto', 'La fascia è l\'obiettivo: 130–160.', withText.map((s) => ({ x: s.date, y: s.wpm, label: lbl(s) })), { format: (v) => fmtNum(v), band: [130, 160], bandLabel: 'obiettivo', unit: 'parole/min' }),
-      chartCard('Intercalari al minuto', 'Più basso è meglio: sotto 3 al minuto.', withText.map((s) => ({ x: s.date, y: s.fillersPerMin, label: lbl(s) })), { format: (v) => fmtNum(v, 1), band: [0, 3], bandLabel: 'obiettivo', yMin: 0, unit: '/min' }),
-      chartCard('Voto medio', 'Media della griglia (misurato, coach, autovalutazione).', data.series.filter((s) => s.avgScore != null).map((s) => ({ x: s.date, y: s.avgScore, label: lbl(s) })), { format: (v) => fmtNum(v, 1), yMin: 1, yMax: 5, unit: 'su 5' }),
-      chartCard('Pause al minuto', 'Pause intenzionali: circa 6–16 al minuto.', data.series.filter((s) => s.pausesPerMin != null).map((s) => ({ x: s.date, y: s.pausesPerMin, label: lbl(s) })), { format: (v) => fmtNum(v, 1), band: [6, 16], bandLabel: 'obiettivo', yMin: 0, unit: '/min' })));
+      chartCard(t('Parole al minuto'), t('La fascia è l\'obiettivo: 130–160.'), withText.map((s) => ({ x: s.date, y: s.wpm, label: lbl(s) })), { format: (v) => fmtNum(v), band: [130, 160], bandLabel: t('obiettivo'), unit: t('parole/min') }),
+      chartCard(t('Intercalari al minuto'), t('Più basso è meglio: sotto 3 al minuto.'), withText.map((s) => ({ x: s.date, y: s.fillersPerMin, label: lbl(s) })), { format: (v) => fmtNum(v, 1), band: [0, 3], bandLabel: t('obiettivo'), yMin: 0, unit: '/min' }),
+      chartCard(t('Voto medio'), t('Media della griglia (misurato, coach, autovalutazione).'), data.series.filter((s) => s.avgScore != null).map((s) => ({ x: s.date, y: s.avgScore, label: lbl(s) })), { format: (v) => fmtNum(v, 1), yMin: 1, yMax: 5, unit: t('su 5') }),
+      chartCard(t('Pause al minuto'), t('Pause intenzionali: circa 6–16 al minuto.'), data.series.filter((s) => s.pausesPerMin != null).map((s) => ({ x: s.date, y: s.pausesPerMin, label: lbl(s) })), { format: (v) => fmtNum(v, 1), band: [6, 16], bandLabel: t('obiettivo'), yMin: 0, unit: '/min' })));
 
     // point zero vs final
     const M = S.meta;
-    content.push(h('section.stack', h('h2', 'Punto zero e confronto finale'),
+    content.push(h('section.stack', h('h2', t('Punto zero e confronto finale')),
       h('div.grid-2', data.comparison.map((c) => {
         const col = (label, s) => h('div.stack', h('div.eyebrow', label),
           s ? h('div.stack',
-            h('span.small', `${fmtNum(s.wpm)} parole/min · ${fmtNum(s.fillersPerMin, 1)} intercalari/min`),
+            h('span.small', `${fmtNum(s.wpm)} ${t('parole/min')} · ${fmtNum(s.fillersPerMin, 1)} ${t('intercalari/min')}`),
             s.hasAudio && audioPlayer(`/api/recordings/${s.id}/audio`),
-            h('a.small', { href: `#/rec/${s.id}` }, 'Dettagli'))
-            : h('span.small.muted', label === 'Inizio' ? 'Non ancora registrata' : 'Nell\'ultima settimana'));
+            h('a.small', { href: `#/rec/${s.id}` }, t('Dettagli')))
+            : h('span.small.muted', label === t('Inizio') ? t('Non ancora registrata') : t('Nell\'ultima settimana')));
         const clip = M.baselineClips.find((x) => x.key === c.key);
-        return h('div.card.stack', h('h3', `${c.title} · ${clip.minutes} min`), col('Inizio', c.baseline), h('hr.divider'), col('Fine', c.final),
-          !c.baseline && h('a.btn.small', { href: `#/record?kind=baseline&key=${c.key}` }, 'Registra il punto zero'));
+        return h('div.card.stack', h('h3', `${c.title} · ${clip.minutes} min`), col(t('Inizio'), c.baseline), h('hr.divider'), col(t('Fine'), c.final),
+          !c.baseline && h('a.btn.small', { href: `#/record?kind=baseline&key=${c.key}` }, t('Registra il punto zero')));
       }))));
 
     // weekly table, as in the program's tracking sheet
-    content.push(h('section.card.stack', h('h2', 'Settimana per settimana'),
+    content.push(h('section.card.stack', h('h2', t('Settimana per settimana')),
       h('div.table-scroll', h('table.grid-table',
-        h('thead', h('tr', h('th', 'Sett.'), h('th', 'Focus'), h('th.num', `Routine (su ${data.daysPerWeek})`), h('th.num', 'Intercalari/min'), h('th.num', 'Parole/min'), h('th', 'Sfida reale'))),
+        h('thead', h('tr', h('th', t('Sett.')), h('th', 'Focus'), h('th.num', t('Routine (su {n})', { n: data.daysPerWeek })), h('th.num', t('Intercalari/min')), h('th.num', t('Parole/min')), h('th', t('Sfida reale')))),
         h('tbody', data.weeks.map((w) => h('tr',
           h('td', String(w.week)), h('td', w.focus), h('td.num', String(w.routineDays)), h('td.num', fmtNum(w.fillersPerMin, 1)), h('td.num', fmtNum(w.wpm)),
-          h('td', w.challengeDone ? h('span.pill.good', 'Fatta') : h('span.muted', '—')))))))));
+          h('td', w.challengeDone ? h('span.pill.good', t('Fatta')) : h('span.muted', '—')))))))));
 
     // all recordings
-    content.push(h('section.card.stack', h('h2', 'Registrazioni'),
+    content.push(h('section.card.stack', h('h2', t('Registrazioni')),
       h('div.list', data.series.slice().reverse().map((s) => h('a.list-item', { href: `#/rec/${s.id}` },
         h('div.icon-circle', icon('wave')),
-        h('div.grow', h('b', lbl(s)), h('span.small.muted', `${fmtDate(s.date)} · ${s.wpm != null ? fmtNum(s.wpm) + ' parole/min' : 'senza trascrizione'}`)),
+        h('div.grow', h('b', lbl(s)), h('span.small.muted', `${fmtDate(s.date)} · ${s.wpm != null ? fmtNum(s.wpm) + ' ' + t('parole/min') : t('senza trascrizione')}`)),
         s.avgScore != null && h('span.pill', fmtNum(s.avgScore, 1)))))));
 
     mount(h('div.stack-lg', content));
@@ -1129,16 +1173,16 @@
   function viewGuide() {
     const M = S.meta;
     mount(h('div.stack-lg',
-      h('div.stack', h('div.eyebrow', 'Guida'), h('h1', 'Il metodo in breve'), h('p.lead', 'Parlare bene è soprattutto pensare in ordine. Queste sono le strutture, le frasi e gli errori su cui lavora il percorso.')),
-      h('section.stack', h('h2', 'Strutture per organizzare il pensiero'),
+      h('div.stack', h('div.eyebrow', t('Guida')), h('h1', t('Il metodo in breve')), h('p.lead', t('Parlare bene è soprattutto pensare in ordine. Queste sono le strutture, le frasi e gli errori su cui lavora il percorso.'))),
+      h('section.stack', h('h2', t('Strutture per organizzare il pensiero')),
         h('div.grid-2', M.structures.map((s) => h('div.card.stack', h('div.row.between', h('h3', s.name), h('span.pill', s.id)), h('p.small.muted', s.when), h('p', h('b', s.scheme)), h('p.serif', s.example))))),
-      h('section.card.stack', h('h2', 'La griglia di valutazione'),
-        h('div.table-scroll', h('table.grid-table', h('thead', h('tr', h('th', 'Criterio'), h('th', 'Cosa osservare'), h('th', 'Chi lo valuta'))),
-          h('tbody', M.criteria.map((c) => h('tr', h('td', h('b', c.label)), h('td', c.look), h('td', { class: 'muted' }, { ai: 'coach AI', measured: 'misurato', self: 'tu' }[c.source]))))))),
-      h('section.card.stack', h('h2', 'Frasi pronte per le riunioni'),
+      h('section.card.stack', h('h2', t('La griglia di valutazione')),
+        h('div.table-scroll', h('table.grid-table', h('thead', h('tr', h('th', t('Criterio')), h('th', t('Cosa osservare')), h('th', t('Chi lo valuta')))),
+          h('tbody', M.criteria.map((c) => h('tr', h('td', h('b', c.label)), h('td', c.look), h('td', { class: 'muted' }, { ai: t('coach AI'), measured: t('misurato'), self: t('tu') }[c.source]))))))),
+      h('section.card.stack', h('h2', t('Frasi pronte per le riunioni')),
         h('div.table-scroll', h('table.grid-table', h('tbody', M.phrases.map((p) => h('tr', h('td', h('b', p.situation)), h('td.serif', p.phrase))))))),
-      h('section.card.stack', h('h2', 'Errori comuni e correzioni'),
-        h('div.table-scroll', h('table.grid-table', h('thead', h('tr', h('th', 'Errore'), h('th', 'Come lo riconosci'), h('th', 'Correzione'))),
+      h('section.card.stack', h('h2', t('Errori comuni e correzioni')),
+        h('div.table-scroll', h('table.grid-table', h('thead', h('tr', h('th', t('Errore')), h('th', t('Come lo riconosci')), h('th', t('Correzione')))),
           h('tbody', M.errors.map((e) => h('tr', h('td', h('b', e.error)), h('td', e.sign), h('td', e.fix)))))))));
   }
 
@@ -1149,44 +1193,48 @@
     const prefs = Object.assign({}, u.preferences);
     const savePref = async (k, v) => {
       prefs[k] = v;
-      try { const r = await api('PUT', '/api/preferences', { preferences: prefs }); S.me.user.preferences = r.preferences; toast('Salvato.'); } catch (e) { toast(e.message); }
+      try { const r = await api('PUT', '/api/preferences', { preferences: prefs }); S.me.user.preferences = r.preferences; toast(t('Salvato.')); } catch (e) { toast(e.message); }
     };
     const row = (title, sub, control) => h('div.rating-row', h('div', h('b', title), sub && h('p.small.muted', sub)), control);
     mount(h('div.stack-lg',
-      h('div.stack', h('div.eyebrow', 'Impostazioni'), h('h1', u.name)),
+      h('div.stack', h('div.eyebrow', t('Impostazioni')), h('h1', u.name)),
       h('section.card.stack',
-        h('h2', 'Percorso'),
+        h('h2', t('Percorso')),
         u.hasPreferences
-          ? row('Preferenze del percorso', `${(prefs.goals || []).length} obiettivi · ${prefs.minutesPerDay} min al giorno · ${prefs.weeks} settimane`, h('a.btn.small', { href: '#/onboarding' }, 'Modifica'))
-          : row('Preferenze', 'Non ancora impostate', h('a.btn.small', { href: '#/onboarding' }, 'Imposta')),
-        u.hasPreferences && row('Tono del feedback', null, segmented([{ v: 'encouraging', l: 'Incoraggiante' }, { v: 'direct', l: 'Diretto' }], prefs.feedbackTone, (v) => savePref('feedbackTone', v))),
-        u.hasPreferences && row('Giorno della registrazione', null, segmented([1, 2, 3, 4, 5, 6, 0].map((v) => ({ v, l: ['D', 'L', 'M', 'M', 'G', 'V', 'S'][v] })), prefs.recordingDay, (v) => savePref('recordingDay', v)))),
+          ? row(t('Preferenze del percorso'), t((prefs.goals || []).length === 1 ? '{g} obiettivo · {m} min al giorno · {w} settimane' : '{g} obiettivi · {m} min al giorno · {w} settimane', { g: (prefs.goals || []).length, m: prefs.minutesPerDay, w: prefs.weeks }), h('a.btn.small', { href: '#/onboarding' }, t('Modifica')))
+          : row(t('Preferenze'), t('Non ancora impostate'), h('a.btn.small', { href: '#/onboarding' }, t('Imposta'))),
+        u.hasPreferences && row(t('Tono del feedback'), null, segmented([{ v: 'encouraging', l: t('Incoraggiante') }, { v: 'direct', l: t('Diretto') }], prefs.feedbackTone, (v) => savePref('feedbackTone', v))),
+        u.hasPreferences && row(t('Giorno della registrazione'), null, segmented([1, 2, 3, 4, 5, 6, 0].map((v) => ({ v, l: (I18N.lang === 'en' ? ['S', 'M', 'T', 'W', 'T', 'F', 'S'] : ['D', 'L', 'M', 'M', 'G', 'V', 'S'])[v] })), prefs.recordingDay, (v) => savePref('recordingDay', v)))),
       h('section.card.stack',
-        h('h2', 'Aspetto'),
-        row('Tema', null, segmented([{ v: 'system', l: 'Sistema' }, { v: 'light', l: 'Chiaro' }, { v: 'dark', l: 'Scuro' }], window.Theme.get(), (v) => window.Theme.set(v)))),
+        h('h2', t('Aspetto')),
+        row(t('Tema'), null, segmented([{ v: 'system', l: t('Sistema') }, { v: 'light', l: t('Chiaro') }, { v: 'dark', l: t('Scuro') }], window.Theme.get(), (v) => window.Theme.set(v))),
+        row(t('Lingua dell\'app'), t('Vale per l\'interfaccia e per ciò che scrive il coach. Il percorso già generato resta nella lingua in cui è stato scritto: rigeneralo per averlo nella nuova lingua.'), langSwitch())),
       h('section.card.stack',
         h('h2', 'Account'),
         u.email && row('Email', u.email, h('span')),
-        ['google', 'facebook'].filter((p) => prov[p]).map((p) => row(p === 'google' ? 'Google' : 'Facebook', linked.includes(p) ? 'Collegato' : 'Collega anche questo account per entrare in entrambi i modi',
-          linked.includes(p) ? h('span.pill.good', 'Collegato') : h('a.btn.small', { href: `/auth/${p}?link=1` }, 'Collega'))),
-        row('AI', `${S.meta.ai.provider === 'anthropic' ? 'Claude' : 'Modello OpenAI-compatibile'} · ${S.meta.ai.model}${S.meta.serverTranscription ? ' · trascrizione sul server' : ' · trascrizione nel browser'}`, h('span')),
+        ['google', 'facebook'].filter((p) => prov[p]).map((p) => row(p === 'google' ? 'Google' : 'Facebook', linked.includes(p) ? t('Collegato') : t('Collega anche questo account per entrare in entrambi i modi'),
+          linked.includes(p) ? h('span.pill.good', t('Collegato')) : h('a.btn.small', { href: `/auth/${p}?link=1` }, t('Collega')))),
+        row('AI', `${S.meta.ai.provider === 'anthropic' ? 'Claude' : t('Modello OpenAI-compatibile')} · ${S.meta.ai.model}${S.meta.serverTranscription ? t(' · trascrizione sul server') : t(' · trascrizione nel browser')}`, h('span')),
         h('div.row',
-          h('button.btn', { onclick: async () => { await api('POST', '/api/auth/logout'); S.me = await api('GET', '/api/me'); location.hash = ''; render(); } }, 'Esci'),
+          h('button.btn', { onclick: async () => { await api('POST', '/api/auth/logout'); S.me = await api('GET', '/api/me'); location.hash = ''; render(); } }, t('Esci')),
           h('button.btn.ghost.danger', {
             onclick: async () => {
-              if (!confirm('Eliminare l\'account? Percorsi, registrazioni e progressi saranno cancellati definitivamente.')) return;
+              if (!confirm(t('Eliminare l\'account? Percorsi, registrazioni e progressi saranno cancellati definitivamente.'))) return;
               try { await api('DELETE', '/api/me'); store.del('onb'); store.del('onbStep'); S.me = await api('GET', '/api/me'); location.hash = ''; render(); } catch (e) { toast(e.message); }
             },
-          }, 'Elimina account'))),
-      h('p.small.muted', { style: 'text-align:center' }, 'Le registrazioni restano nel tuo account. L\'audio non viene inviato all\'AI: il coach legge solo la trascrizione e i numeri misurati.')));
+          }, t('Elimina account')))),
+      h('p.small.muted', { style: 'text-align:center' }, t('Le registrazioni restano nel tuo account. L\'audio non viene inviato all\'AI: il coach legge solo la trascrizione e i numeri misurati.'))));
   }
 
   /* ================= boot ================= */
 
   async function boot() {
+    applyStatic();
     mount(loading());
     try {
-      [S.me, S.meta] = await Promise.all([api('GET', '/api/me'), api('GET', '/api/meta')]);
+      [S.me, S.meta] = await Promise.all([api('GET', '/api/me'), api('GET', '/api/meta?lang=' + I18N.lang)]);
+      const saved = S.me.user && S.me.user.hasPreferences && S.me.user.preferences.uiLang;
+      if (saved && saved !== I18N.lang) { I18N.set(saved); S.meta = await api('GET', '/api/meta?lang=' + saved); }
     } catch (e) {
       mount(errorBox(e, boot));
       return;
@@ -1194,8 +1242,9 @@
     if (S.me.user && location.search.includes('auth_error')) {
       const err = new URLSearchParams(location.search).get('auth_error');
       history.replaceState(null, '', '/' + location.hash);
-      if (AUTH_ERRORS[err]) setTimeout(() => toast(AUTH_ERRORS[err]), 300);
+      if (t(AUTH_ERRORS[err])) setTimeout(() => toast(t(AUTH_ERRORS[err])), 300);
     }
+    applyStatic();
     window.addEventListener('hashchange', render);
     render();
   }
