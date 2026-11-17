@@ -49,7 +49,9 @@ async function handle(req, res) {
     catch (e) { return sendJson(res, 503, { status: 'db_unavailable' }); }
   }
   if (url.pathname.startsWith('/auth/')) {
-    if (req.method !== 'GET' && !req.headers['x-articola']) throw new HttpError(403, 'Richiesta non valida.');
+    // The app-login confirmation is a plain HTML form: it is protected by its own SameSite cookie instead.
+    const formPost = url.pathname === '/auth/app/confirm';
+    if (req.method !== 'GET' && !formPost && !req.headers['x-articola']) throw new HttpError(403, 'Richiesta non valida.');
     return auth.handle(req, res, url);
   }
   if (url.pathname.startsWith('/api/')) return api.handle(req, res, url);

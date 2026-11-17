@@ -116,6 +116,21 @@ const ok = (label) => console.log('  ✓', label);
   r = await a('GET', '/api/me'); const prefsNow = r.data.user.preferences; assert.equal(prefsNow.uiLang, 'it');
   r = await a('PUT', '/api/preferences', { preferences: Object.assign({}, prefsNow, { uiLang: 'en' }) }); assert.equal(r.data.preferences.uiLang, 'en');
   r = await a('PUT', '/api/preferences', { preferences: Object.assign({}, prefsNow, { uiLang: 'fr' }) }); assert.equal(r.data.preferences.uiLang, 'it'); ok('interface language saved in preferences');
+  // Mobile app: bearer tokens instead of the cookie, and the secret-polling sign-in.
+  const raw = (method, path, headers = {}, body) => fetch(BASE + path, { method, headers: Object.assign({ 'x-articola': '1', 'content-type': 'application/json' }, headers), body });
+  let x = await (await raw('POST', '/auth/dev', {}, JSON.stringify({ name: 'Anna Test', app: true }))).json();
+  assert.ok(x.token && x.token.length >= 40); const bearer = { authorization: 'Bearer ' + x.token };
+  let resp = await raw('GET', '/api/me', bearer); assert.equal(resp.headers.get('set-cookie'), null); x = await resp.json();
+  assert.equal(x.user.name, 'Anna Test'); assert.equal(x.path.status, 'ready');
+  resp = await raw('GET', '/api/recordings', { authorization: 'Bearer ' + 'x'.repeat(43) }); assert.equal(resp.status, 401); ok('app bearer token authenticates, no cookie');
+  const secret = require('crypto').randomBytes(32).toString('base64url');
+  x = await (await raw('POST', '/auth/app/token', {}, JSON.stringify({ secret }))).json(); assert.equal(x.status, 'waiting');
+  resp = await raw('POST', '/auth/app/token', {}, JSON.stringify({ secret: 'short' })); assert.equal(resp.status, 400);
+  resp = await fetch(BASE + '/auth/app/confirm?h=' + 'A'.repeat(43)); assert.equal(resp.status, 400);
+  resp = await fetch(BASE + '/auth/app/confirm', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: 'h=' + 'A'.repeat(43) }); assert.equal(resp.status, 400); ok('app sign-in: polling and confirmation refuse unknown requests');
+  resp = await raw('POST', '/api/auth/logout', bearer); assert.equal(resp.status, 200);
+  resp = await raw('GET', '/api/recordings', bearer); assert.equal(resp.status, 401); ok('app logout revokes the token');
+
   r = await a('DELETE', '/api/me'); assert.equal(r.status, 200);
   r = await a('GET', '/api/me'); assert.equal(r.data.user, null); ok('account deleted and logged out');
   console.log('\nAll e2e checks passed.');

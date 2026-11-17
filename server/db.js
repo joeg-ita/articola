@@ -74,6 +74,7 @@ async function migrate() {
 async function cleanup() {
   try {
     await query('DELETE FROM auth_sessions WHERE expires_at < now()');
+    await query('DELETE FROM app_logins WHERE expires_at < now()');
   } catch (e) { console.error('[db] cleanup fallito:', e.message); }
 }
 
